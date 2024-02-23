@@ -1,14 +1,4 @@
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+//! # uniswap-v2-sdk
+//!
+//! A Rust SDK for building applications on top of Uniswap V2.
+//! Migration from the TypeScript [Uniswap/v2-sdk](https://github.com/Uniswap/v2-sdk).

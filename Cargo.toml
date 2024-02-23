@@ -2,5 +2,20 @@
 name = "uniswap-v2-sdk"
 version = "0.1.0"
 edition = "2021"
+authors = ["Shuhui Luo <twitter.com/aureliano_law>"]
+description = "Uniswap V2 SDK for Rust"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/shuhuiluo/uniswap-v2-sdk-rs"
+keywords = ["uniswap-v2", "ethereum", "rust", "sdk"]
+exclude = [".github", ".gitignore", "rustfmt.toml"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
+alloy-primitives = "0.6"
+alloy-sol-types = "0.6"
+anyhow = "1.0"
+once_cell = "1.19"
+uniswap-sdk-core = "0.15.0"
