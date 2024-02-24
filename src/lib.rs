@@ -4,3 +4,4 @@
 //! Migration from the TypeScript [Uniswap/v2-sdk](https://github.com/Uniswap/v2-sdk).
 
 pub mod constants;
+pub mod entities;
