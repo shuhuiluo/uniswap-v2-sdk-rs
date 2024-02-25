@@ -19,4 +19,5 @@ alloy-sol-types = "0.6"
 anyhow = "1.0"
 once_cell = "1.19"
 ruint = "1.11"
-uniswap-sdk-core = "0.15.0"
+thiserror = "1.0.57"
+uniswap-sdk-core = { git = "https://github.com/malik672/uniswap-sdk-core-rust", branch = "doc" }

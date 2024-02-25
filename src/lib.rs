@@ -5,3 +5,4 @@
 
 pub mod constants;
 pub mod entities;
+pub mod errors;
