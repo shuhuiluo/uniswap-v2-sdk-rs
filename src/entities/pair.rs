@@ -346,28 +346,26 @@ impl Pair {
 
         let total_supply_adjusted = if !fee_on {
             total_supply.clone()
-        } else {
-            if let Some(k_last) = k_last {
-                if k_last.is_zero() {
-                    total_supply.clone()
-                } else {
-                    let root_k = (self.reserve0().quotient() * self.reserve1().quotient()).sqrt();
-                    let root_k_last = k_last.sqrt();
-                    if root_k > root_k_last {
-                        let numerator = total_supply.quotient() * (&root_k - &root_k_last);
-                        let denominator = root_k * FIVE.clone() + root_k_last;
-                        let fee_liquidity = numerator / denominator;
-                        total_supply.add(&CurrencyAmount::from_raw_amount(
-                            self.liquidity_token.clone(),
-                            fee_liquidity,
-                        )?)?
-                    } else {
-                        total_supply.clone()
-                    }
-                }
+        } else if let Some(k_last) = k_last {
+            if k_last.is_zero() {
+                total_supply.clone()
             } else {
-                return Err(anyhow!("K_LAST"));
+                let root_k = (self.reserve0().quotient() * self.reserve1().quotient()).sqrt();
+                let root_k_last = k_last.sqrt();
+                if root_k > root_k_last {
+                    let numerator = total_supply.quotient() * (&root_k - &root_k_last);
+                    let denominator = root_k * FIVE.clone() + root_k_last;
+                    let fee_liquidity = numerator / denominator;
+                    total_supply.add(&CurrencyAmount::from_raw_amount(
+                        self.liquidity_token.clone(),
+                        fee_liquidity,
+                    )?)?
+                } else {
+                    total_supply.clone()
+                }
             }
+        } else {
+            return Err(anyhow!("K_LAST"));
         };
 
         let result = liquidity.quotient() * self.reserve_of(token)?.quotient()
@@ -380,9 +378,9 @@ impl Pair {
         input_amount: &CurrencyAmount<Token>,
     ) -> Result<Percent> {
         let sell_fee_bips = if self.token0().equals(&input_amount.currency.wrapped()) {
-            self.token0().meta.sell_fee_bps.clone()
+            self.token0().sell_fee_bps.clone()
         } else {
-            self.token1().meta.sell_fee_bps.clone()
+            self.token1().sell_fee_bps.clone()
         }
         .unwrap_or(BigUint::zero());
         if sell_fee_bips > BigUint::zero() {
@@ -397,15 +395,280 @@ impl Pair {
         output_amount: &CurrencyAmount<Token>,
     ) -> Result<Percent> {
         let buy_fee_bips = if self.token0().equals(&output_amount.currency.wrapped()) {
-            self.token0().meta.buy_fee_bps.clone()
+            self.token0().buy_fee_bps.clone()
         } else {
-            self.token1().meta.buy_fee_bps.clone()
+            self.token1().buy_fee_bps.clone()
         }
         .unwrap_or(BigUint::zero());
         if buy_fee_bips > BigUint::zero() {
             Ok(ONE_HUNDRED_PERCENT.clone() - Percent::new(buy_fee_bips, BASIS_POINTS.clone()))
         } else {
             Ok(ZERO_PERCENT.clone())
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use once_cell::sync::Lazy;
+
+    static USDC: Lazy<Token> = Lazy::new(|| {
+        token!(
+            1,
+            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            18,
+            "USDC",
+            "USD Coin"
+        )
+    });
+    static DAI: Lazy<Token> = Lazy::new(|| {
+        token!(
+            1,
+            "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            18,
+            "DAI",
+            "DAI Stablecoin"
+        )
+    });
+
+    mod compute_pair_address {
+        use super::*;
+
+        #[test]
+        fn should_correctly_compute_the_pool_address() {
+            let token_a = USDC.clone();
+            let token_b = DAI.clone();
+            let result = compute_pair_address(
+                address!("1111111111111111111111111111111111111111"),
+                token_a.address(),
+                token_b.address(),
+            );
+            assert_eq!(result, address!("b50b5182D6a47EC53a469395AF44e371d7C76ed4"));
+        }
+
+        #[test]
+        fn should_give_same_result_regardless_of_token_order() {
+            let token_a = USDC.clone();
+            let token_b = DAI.clone();
+            let result_a =
+                compute_pair_address(FACTORY_ADDRESS, token_a.address(), token_b.address());
+
+            let token_a = DAI.clone();
+            let token_b = USDC.clone();
+            let result_b =
+                compute_pair_address(FACTORY_ADDRESS, token_a.address(), token_b.address());
+
+            assert_eq!(result_a, result_b);
+        }
+    }
+
+    mod pair {
+        use super::*;
+
+        static USDC_SEPOLIA: Lazy<Token> = Lazy::new(|| {
+            token!(
+                11155111,
+                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                18,
+                "USDC",
+                "USD Coin"
+            )
+        });
+        static DAI_SEPOLIA: Lazy<Token> = Lazy::new(|| {
+            token!(
+                11155111,
+                "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+                18,
+                "DAI",
+                "DAI Stablecoin"
+            )
+        });
+        static USDC_AMOUNT: Lazy<CurrencyAmount<Token>> =
+            Lazy::new(|| CurrencyAmount::from_raw_amount(USDC.clone(), 100).unwrap());
+        static DAI_AMOUNT: Lazy<CurrencyAmount<Token>> =
+            Lazy::new(|| CurrencyAmount::from_raw_amount(DAI.clone(), 100).unwrap());
+        static PAIR: Lazy<Pair> =
+            Lazy::new(|| Pair::new(USDC_AMOUNT.clone(), DAI_AMOUNT.clone()).unwrap());
+
+        #[test]
+        fn constructor() {
+            let result = Pair::new(
+                USDC_AMOUNT.clone(),
+                CurrencyAmount::from_raw_amount(Ether::on_chain(3).wrapped(), 100).unwrap(),
+            );
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn get_address_returns_correct_address() {
+            let result = Pair::get_address(&USDC, &DAI);
+            assert_eq!(result, address!("AE461cA67B15dc8dc81CE7615e0320dA1A9aB8D5"));
+        }
+
+        #[test]
+        fn get_address_returns_default_address_for_testnet_not_in_map() {
+            assert_eq!(
+                Pair::get_address(&USDC_SEPOLIA, &DAI_SEPOLIA),
+                compute_pair_address(
+                    FACTORY_ADDRESS,
+                    USDC_SEPOLIA.address(),
+                    DAI_SEPOLIA.address(),
+                )
+            );
+        }
+
+        #[test]
+        fn token0_always_is_the_token_that_sorts_before() {
+            assert_eq!(*PAIR.token0(), DAI.clone());
+        }
+
+        #[test]
+        fn token1_always_is_the_token_that_sorts_after() {
+            assert_eq!(*PAIR.token1(), USDC.clone());
+            assert_eq!(
+                *Pair::new(DAI_AMOUNT.clone(), USDC_AMOUNT.clone(),)
+                    .unwrap()
+                    .token1(),
+                USDC.clone()
+            );
+        }
+
+        #[test]
+        fn reserve0_always_comes_from_the_token_that_sorts_before() {
+            let dai_amount = CurrencyAmount::from_raw_amount(DAI.clone(), 101).unwrap();
+            assert_eq!(
+                *Pair::new(USDC_AMOUNT.clone(), dai_amount.clone(),)
+                    .unwrap()
+                    .reserve0(),
+                dai_amount.clone()
+            );
+            assert_eq!(
+                *Pair::new(dai_amount.clone(), USDC_AMOUNT.clone(),)
+                    .unwrap()
+                    .reserve0(),
+                dai_amount.clone()
+            );
+        }
+
+        #[test]
+        fn reserve1_always_comes_from_the_token_that_sorts_after() {
+            let dai_amount = CurrencyAmount::from_raw_amount(DAI.clone(), 101).unwrap();
+            assert_eq!(
+                *Pair::new(USDC_AMOUNT.clone(), dai_amount.clone(),)
+                    .unwrap()
+                    .reserve1(),
+                USDC_AMOUNT.clone()
+            );
+            assert_eq!(
+                *Pair::new(dai_amount.clone(), USDC_AMOUNT.clone(),)
+                    .unwrap()
+                    .reserve1(),
+                USDC_AMOUNT.clone()
+            );
+        }
+
+        #[test]
+        fn token0_price_returns_price_of_token0_in_terms_of_token1() {
+            let usdc_amount = CurrencyAmount::from_raw_amount(USDC.clone(), 101).unwrap();
+            assert_eq!(
+                Pair::new(usdc_amount.clone(), DAI_AMOUNT.clone())
+                    .unwrap()
+                    .token0_price()
+                    .unwrap(),
+                Price::new(DAI.clone(), USDC.clone(), 100, 101)
+            );
+            assert_eq!(
+                Pair::new(DAI_AMOUNT.clone(), usdc_amount)
+                    .unwrap()
+                    .token0_price()
+                    .unwrap(),
+                Price::new(DAI.clone(), USDC.clone(), 100, 101)
+            );
+        }
+
+        #[test]
+        fn token1_price_returns_price_of_token1_in_terms_of_token0() {
+            let usdc_amount = CurrencyAmount::from_raw_amount(USDC.clone(), 101).unwrap();
+            assert_eq!(
+                Pair::new(usdc_amount.clone(), DAI_AMOUNT.clone())
+                    .unwrap()
+                    .token1_price()
+                    .unwrap(),
+                Price::new(USDC.clone(), DAI.clone(), 101, 100)
+            );
+            assert_eq!(
+                Pair::new(DAI_AMOUNT.clone(), usdc_amount)
+                    .unwrap()
+                    .token1_price()
+                    .unwrap(),
+                Price::new(USDC.clone(), DAI.clone(), 101, 100)
+            );
+        }
+
+        #[test]
+        fn price_of_returns_price_of_token_in_terms_of_other_token() {
+            let pair = Pair::new(
+                CurrencyAmount::from_raw_amount(USDC.clone(), 101).unwrap(),
+                DAI_AMOUNT.clone(),
+            )
+            .unwrap();
+            assert_eq!(pair.price_of(&DAI).unwrap(), pair.token0_price().unwrap());
+            assert_eq!(pair.price_of(&USDC).unwrap(), pair.token1_price().unwrap());
+        }
+
+        #[test]
+        fn price_of_throws_if_invalid_token() {
+            let result = PAIR.price_of(&Ether::on_chain(1).wrapped());
+            assert!(result.is_err());
+        }
+
+        #[test]
+        fn reserve_of_returns_correct_reserve() {
+            let dai_amount = CurrencyAmount::from_raw_amount(DAI.clone(), 101).unwrap();
+            assert_eq!(
+                *Pair::new(USDC_AMOUNT.clone(), dai_amount.clone())
+                    .unwrap()
+                    .reserve_of(&USDC)
+                    .unwrap(),
+                USDC_AMOUNT.clone()
+            );
+            assert_eq!(
+                *Pair::new(dai_amount, USDC_AMOUNT.clone())
+                    .unwrap()
+                    .reserve_of(&USDC)
+                    .unwrap(),
+                USDC_AMOUNT.clone()
+            );
+        }
+
+        #[test]
+        fn reserve_of_throws_if_not_in_the_pair() {
+            assert!(Pair::new(
+                CurrencyAmount::from_raw_amount(DAI.clone(), 101).unwrap(),
+                USDC_AMOUNT.clone()
+            )
+            .unwrap()
+            .reserve_of(&Ether::on_chain(1).wrapped())
+            .is_err());
+        }
+
+        #[test]
+        fn chain_id_returns_token0_chain_id() {
+            assert_eq!(PAIR.chain_id(), 1);
+            assert_eq!(
+                Pair::new(DAI_AMOUNT.clone(), USDC_AMOUNT.clone())
+                    .unwrap()
+                    .chain_id(),
+                1
+            );
+        }
+
+        #[test]
+        fn involves_token() {
+            assert!(PAIR.involves_token(&USDC));
+            assert!(PAIR.involves_token(&DAI));
+            assert!(!PAIR.involves_token(&Ether::on_chain(1).wrapped()));
         }
     }
 }

@@ -17,12 +17,12 @@ pub const INIT_CODE_HASH: B256 =
 pub static MINIMUM_LIQUIDITY: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
 
 // exports for internal consumption
-pub(crate) static ZERO: Lazy<BigInt> = Lazy::new(|| BigInt::from(0));
-pub(crate) static ONE: Lazy<BigInt> = Lazy::new(|| BigInt::from(1));
+pub(crate) static _ZERO: Lazy<BigInt> = Lazy::new(|| BigInt::from(0));
+pub(crate) static _ONE: Lazy<BigInt> = Lazy::new(|| BigInt::from(1));
 pub(crate) static FIVE: Lazy<BigInt> = Lazy::new(|| BigInt::from(5));
 pub(crate) static _997: Lazy<BigInt> = Lazy::new(|| BigInt::from(997));
-pub(crate) const _1000: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
+pub(crate) static _1000: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
 pub(crate) static BASIS_POINTS: Lazy<BigInt> = Lazy::new(|| BigInt::from(10000));
 
-pub(crate) static ZERO_PERCENT: Lazy<Percent> = Lazy::new(|| Percent::default());
+pub(crate) static ZERO_PERCENT: Lazy<Percent> = Lazy::new(Percent::default);
 pub(crate) static ONE_HUNDRED_PERCENT: Lazy<Percent> = Lazy::new(|| Percent::new(1, 1));
