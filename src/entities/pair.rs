@@ -670,5 +670,290 @@ mod tests {
             assert!(PAIR.involves_token(&DAI));
             assert!(!PAIR.involves_token(&Ether::on_chain(1).wrapped()));
         }
+
+        mod get_input_amount_and_get_output_amount {
+            use super::*;
+
+            static BLAST_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(400u32));
+
+            static BLAST_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(10000u32));
+
+            static BLAST: Lazy<Token> = Lazy::new(|| {
+                Token::new(
+                    1,
+                    "0x3ed643e9032230f01c6c36060e305ab53ad3b482".to_string(),
+                    18,
+                    Some("BLAST".to_string()),
+                    Some("BLAST".to_string()),
+                    Some(BLAST_BUY_FEE_BPS.clone()),
+                    Some(BLAST_SELL_FEE_BPS.clone()),
+                )
+            });
+
+            static BLAST_WIHTOUT_TAX: Lazy<Token> = Lazy::new(|| {
+                token!(
+                    1,
+                    "0x3ed643e9032230f01c6c36060e305ab53ad3b482",
+                    18,
+                    "BLAST",
+                    "BLAST"
+                )
+            });
+
+            static BLASTERS_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(300u32));
+
+            static BLASTERS_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(350u32));
+
+            static BLASTERS: Lazy<Token> = Lazy::new(|| {
+                Token::new(
+                    1,
+                    "0xab98093C7232E98A47D7270CE0c1c2106f61C73b".to_string(),
+                    9,
+                    Some("BLAST".to_string()),
+                    Some("BLASTERS".to_string()),
+                    Some(BLASTERS_BUY_FEE_BPS.clone()),
+                    Some(BLASTERS_SELL_FEE_BPS.clone()),
+                )
+            });
+
+            static BLASTERS_WITHOUT_TAX: Lazy<Token> = Lazy::new(|| {
+                token!(
+                    1,
+                    "0xab98093C7232E98A47D7270CE0c1c2106f61C73b",
+                    9,
+                    "BLAST",
+                    "BLASTERS"
+                )
+            });
+
+            mod when_calculating_fot_fees {
+                use super::*;
+
+                #[test]
+                fn get_output_amount_for_input_token_blasters_and_output_token_blast() {
+                    let reserve_blaster_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS.clone(), 10000).unwrap();
+                    let reserve_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST.clone(), 10000).unwrap();
+
+                    let pair = Pair::new(reserve_blaster_amount, reserve_blast_amount).unwrap();
+
+                    let input_blasters_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS_WITHOUT_TAX.clone(), 100).unwrap();
+                    let (output_blast_amount, _) = pair
+                        .get_output_amount(&input_blasters_amount, true)
+                        .unwrap();
+
+                    assert_eq!(output_blast_amount.to_exact(), "0.00000000000000009");
+                }
+
+                #[test]
+                fn get_input_amount_for_input_token_blasters_and_output_token_blast() {
+                    let reserve_blaster_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS.clone(), 10000).unwrap();
+                    let reserve_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST.clone(), 10000).unwrap();
+
+                    let pair = Pair::new(reserve_blaster_amount, reserve_blast_amount).unwrap();
+
+                    let output_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST_WIHTOUT_TAX.clone(), 91).unwrap();
+                    let (input_blaster_amount, _) =
+                        pair.get_input_amount(&output_blast_amount, true).unwrap();
+
+                    assert_eq!(input_blaster_amount.to_exact(), "0.000000101");
+                }
+            }
+
+            mod when_not_calculating_fot_fees {
+                use super::*;
+
+                #[test]
+                fn get_output_amount_for_input_token_blasters_and_output_token_blast() {
+                    let reserve_blaster_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS.clone(), 10000).unwrap();
+                    let reserve_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST.clone(), 10000).unwrap();
+
+                    let pair = Pair::new(reserve_blaster_amount, reserve_blast_amount).unwrap();
+
+                    let input_blasters_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS_WITHOUT_TAX.clone(), 100).unwrap();
+                    let (output_blast_amount, _) = pair
+                        .get_output_amount(&input_blasters_amount, false)
+                        .unwrap();
+
+                    assert_eq!(output_blast_amount.to_exact(), "0.000000000000000098");
+                }
+
+                #[test]
+                fn get_input_amount_for_input_token_blasters_and_output_token_blast() {
+                    let reserve_blaster_amount =
+                        CurrencyAmount::from_raw_amount(BLASTERS.clone(), 10000).unwrap();
+                    let reserve_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST.clone(), 10000).unwrap();
+
+                    let pair = Pair::new(reserve_blaster_amount, reserve_blast_amount).unwrap();
+
+                    let output_blast_amount =
+                        CurrencyAmount::from_raw_amount(BLAST_WIHTOUT_TAX.clone(), 91).unwrap();
+                    let (input_blaster_amount, _) =
+                        pair.get_input_amount(&output_blast_amount, false).unwrap();
+
+                    assert_eq!(input_blaster_amount.to_exact(), "0.000000093");
+                }
+            }
+        }
+
+        mod miscellaneous {
+            use super::*;
+
+            #[test]
+            fn get_liquidity_minted_0() {
+                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let pair = Pair::new(
+                    CurrencyAmount::from_raw_amount(token_a.clone(), 0).unwrap(),
+                    CurrencyAmount::from_raw_amount(token_b.clone(), 0).unwrap(),
+                )
+                .unwrap();
+
+                assert_eq!(
+                    pair.get_liquidity_minted(
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 0).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
+                    )
+                    .unwrap_err()
+                    .to_string(),
+                    "Insufficient input amount"
+                );
+
+                assert_eq!(
+                    pair.get_liquidity_minted(
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 0).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a.clone(), 1000000).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b.clone(), 1).unwrap(),
+                    )
+                    .unwrap_err()
+                    .to_string(),
+                    "Insufficient input amount"
+                );
+
+                assert_eq!(
+                    pair.get_liquidity_minted(
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 0).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a.clone(), 1001).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b.clone(), 1001).unwrap(),
+                    )
+                    .unwrap()
+                    .quotient()
+                    .to_string(),
+                    "1"
+                );
+            }
+
+            #[test]
+            fn get_liquidity_minted_not_0() {
+                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let pair = Pair::new(
+                    CurrencyAmount::from_raw_amount(token_a.clone(), 10000).unwrap(),
+                    CurrencyAmount::from_raw_amount(token_b.clone(), 10000).unwrap(),
+                )
+                .unwrap();
+
+                assert_eq!(
+                    pair.get_liquidity_minted(
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 10000)
+                            .unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a.clone(), 2000).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b.clone(), 2000).unwrap(),
+                    )
+                    .unwrap()
+                    .quotient()
+                    .to_string(),
+                    "2000"
+                );
+            }
+
+            #[test]
+            fn get_liquidity_value_not_fee_on() {
+                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let pair = Pair::new(
+                    CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
+                    CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
+                )
+                .unwrap();
+
+                let liquidity_value = pair
+                    .get_liquidity_value(
+                        &token_a,
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 1000)
+                            .unwrap(),
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 1000)
+                            .unwrap(),
+                        false,
+                        None,
+                    )
+                    .unwrap();
+                assert_eq!(liquidity_value.currency, token_a);
+                assert_eq!(liquidity_value.quotient().to_string(), "1000");
+
+                let liquidity_value = pair
+                    .get_liquidity_value(
+                        &token_a,
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 1000)
+                            .unwrap(),
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 500)
+                            .unwrap(),
+                        false,
+                        None,
+                    )
+                    .unwrap();
+                assert_eq!(liquidity_value.currency, token_a);
+                assert_eq!(liquidity_value.quotient().to_string(), "500");
+
+                let liquidity_value = pair
+                    .get_liquidity_value(
+                        &token_b,
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 1000)
+                            .unwrap(),
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 1000)
+                            .unwrap(),
+                        false,
+                        None,
+                    )
+                    .unwrap();
+                assert_eq!(liquidity_value.currency, token_b);
+                assert_eq!(liquidity_value.quotient().to_string(), "1000");
+            }
+
+            #[test]
+            fn get_liquidity_value_fee_on() {
+                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let pair = Pair::new(
+                    CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
+                    CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
+                )
+                .unwrap();
+
+                let liquidity_value = pair
+                    .get_liquidity_value(
+                        &token_a,
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 500)
+                            .unwrap(),
+                        &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 500)
+                            .unwrap(),
+                        true,
+                        Some(BigInt::from(250000)),
+                    )
+                    .unwrap();
+                assert_eq!(liquidity_value.currency, token_a);
+                assert_eq!(liquidity_value.quotient().to_string(), "917");
+            }
+        }
     }
 }
