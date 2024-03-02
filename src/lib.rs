@@ -6,3 +6,7 @@
 pub mod constants;
 pub mod entities;
 pub mod errors;
+
+pub mod prelude {
+    pub use crate::{constants::*, entities::*, errors::*};
+}
