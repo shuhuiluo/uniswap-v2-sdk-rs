@@ -1,9 +1,30 @@
 use crate::{constants::*, errors::Error};
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use uniswap_sdk_core::{prelude::*, token};
 
+/// Computes the address of a Uniswap V2 pair
+///
+/// ## Arguments
+///
+/// * `factory`: The Uniswap V2 factory address
+/// * `token_a`: The first token of the pair, irrespective of sort order
+/// * `token_b`: The second token of the pair, irrespective of sort order
+///
+/// ## Examples
+///
+/// ```
+/// use alloy_primitives::address;
+/// use uniswap_v2_sdk::prelude::*;
+///
+/// let result = compute_pair_address(
+///     address!("1111111111111111111111111111111111111111"),
+///     address!("A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"),
+///     address!("6B175474E89094C44Da98b954EedeAC495271d0F"),
+/// );
+/// assert_eq!(result, address!("b50b5182D6a47EC53a469395AF44e371d7C76ed4"));
+/// ```
 pub fn compute_pair_address(factory: Address, token_a: Address, token_b: Address) -> Address {
     let (token_0, token_1) = if token_a < token_b {
         (token_a, token_b)
@@ -55,6 +76,10 @@ impl Pair {
         })
     }
 
+    pub fn address(&self) -> Address {
+        self.liquidity_token.address()
+    }
+
     /// Returns true if the token is either token0 or token1
     ///
     /// ## Arguments
@@ -65,26 +90,28 @@ impl Pair {
             || token.equals(&self.token_amounts[1].currency)
     }
 
-    /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to reserve0
-    pub fn token0_price(&self) -> Result<Price<Token, Token>> {
-        let result = self.token_amounts[1].divide(&self.token_amounts[0])?;
-        Ok(Price::new(
+    /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to
+    /// reserve0
+    pub fn token0_price(&self) -> Price<Token, Token> {
+        let result = self.token_amounts[1].as_fraction() / self.token_amounts[0].as_fraction();
+        Price::new(
             self.token0().clone(),
             self.token1().clone(),
             result.denominator(),
             result.numerator(),
-        ))
+        )
     }
 
-    /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to reserve1
-    pub fn token1_price(&self) -> Result<Price<Token, Token>> {
-        let result = self.token_amounts[0].divide(&self.token_amounts[1])?;
-        Ok(Price::new(
+    /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to
+    /// reserve1
+    pub fn token1_price(&self) -> Price<Token, Token> {
+        let result = self.token_amounts[0].as_fraction() / self.token_amounts[1].as_fraction();
+        Price::new(
             self.token1().clone(),
             self.token0().clone(),
             result.denominator(),
             result.numerator(),
-        ))
+        )
     }
 
     /// Return the price of the given token in terms of the other token in the pair.
@@ -94,11 +121,11 @@ impl Pair {
     /// * `token`: token to return price of
     pub fn price_of(&self, token: &Token) -> Result<Price<Token, Token>> {
         if self.involves_token(token) {
-            if token.equals(self.token0()) {
+            Ok(if token.equals(self.token0()) {
                 self.token0_price()
             } else {
                 self.token1_price()
-            }
+            })
         } else {
             Err(anyhow!("TOKEN"))
         }
@@ -142,7 +169,7 @@ impl Pair {
         calculate_fot_fees: bool,
     ) -> Result<(CurrencyAmount<Token>, Self)> {
         if !self.involves_token(&input_amount.currency) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         if self.reserve0().quotient().is_zero() || self.reserve1().quotient().is_zero() {
             return Err(Error::InsufficientReserves.into());
@@ -215,7 +242,7 @@ impl Pair {
         calculate_fot_fees: bool,
     ) -> Result<(CurrencyAmount<Token>, Self)> {
         if !self.involves_token(&output_amount.currency) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         let percent_after_buy_fees = if calculate_fot_fees {
             self.derive_percent_after_buy_fees(output_amount)?
@@ -290,7 +317,7 @@ impl Pair {
         token_amount_b: &CurrencyAmount<Token>,
     ) -> Result<CurrencyAmount<Token>> {
         if !total_supply.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
         let token_amounts = if token_amount_a
             .currency
@@ -303,7 +330,7 @@ impl Pair {
         if !token_amounts.0.currency.equals(self.token0())
             || !token_amounts.1.currency.equals(self.token1())
         {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
 
         let liquidity = if total_supply.quotient().is_zero() {
@@ -332,16 +359,16 @@ impl Pair {
         k_last: Option<BigInt>,
     ) -> Result<CurrencyAmount<Token>> {
         if !self.involves_token(token) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         if !total_supply.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("TOTAL_SUPPLY"));
+            bail!("TOTAL_SUPPLY");
         }
         if !liquidity.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
         if liquidity.quotient() > total_supply.quotient() {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
 
         let total_supply_adjusted = if !fee_on {
@@ -365,7 +392,7 @@ impl Pair {
                 }
             }
         } else {
-            return Err(anyhow!("K_LAST"));
+            bail!("K_LAST");
         };
 
         let result = liquidity.quotient() * self.reserve_of(token)?.quotient()
@@ -574,15 +601,13 @@ mod tests {
             assert_eq!(
                 Pair::new(usdc_amount.clone(), DAI_AMOUNT.clone())
                     .unwrap()
-                    .token0_price()
-                    .unwrap(),
+                    .token0_price(),
                 Price::new(DAI.clone(), USDC.clone(), 100, 101)
             );
             assert_eq!(
                 Pair::new(DAI_AMOUNT.clone(), usdc_amount)
                     .unwrap()
-                    .token0_price()
-                    .unwrap(),
+                    .token0_price(),
                 Price::new(DAI.clone(), USDC.clone(), 100, 101)
             );
         }
@@ -593,15 +618,13 @@ mod tests {
             assert_eq!(
                 Pair::new(usdc_amount.clone(), DAI_AMOUNT.clone())
                     .unwrap()
-                    .token1_price()
-                    .unwrap(),
+                    .token1_price(),
                 Price::new(USDC.clone(), DAI.clone(), 101, 100)
             );
             assert_eq!(
                 Pair::new(DAI_AMOUNT.clone(), usdc_amount)
                     .unwrap()
-                    .token1_price()
-                    .unwrap(),
+                    .token1_price(),
                 Price::new(USDC.clone(), DAI.clone(), 101, 100)
             );
         }
@@ -613,8 +636,8 @@ mod tests {
                 DAI_AMOUNT.clone(),
             )
             .unwrap();
-            assert_eq!(pair.price_of(&DAI).unwrap(), pair.token0_price().unwrap());
-            assert_eq!(pair.price_of(&USDC).unwrap(), pair.token1_price().unwrap());
+            assert_eq!(pair.price_of(&DAI).unwrap(), pair.token0_price());
+            assert_eq!(pair.price_of(&USDC).unwrap(), pair.token1_price());
         }
 
         #[test]
