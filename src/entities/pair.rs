@@ -1,7 +1,7 @@
 use crate::{constants::*, errors::Error};
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use uniswap_sdk_core::{prelude::*, token};
 
 /// Computes the address of a Uniswap V2 pair
@@ -90,7 +90,8 @@ impl Pair {
             || token.equals(&self.token_amounts[1].currency)
     }
 
-    /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to reserve0
+    /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to
+    /// reserve0
     pub fn token0_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[1].as_fraction() / self.token_amounts[0].as_fraction();
         Price::new(
@@ -101,7 +102,8 @@ impl Pair {
         )
     }
 
-    /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to reserve1
+    /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to
+    /// reserve1
     pub fn token1_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[0].as_fraction() / self.token_amounts[1].as_fraction();
         Price::new(
@@ -167,7 +169,7 @@ impl Pair {
         calculate_fot_fees: bool,
     ) -> Result<(CurrencyAmount<Token>, Self)> {
         if !self.involves_token(&input_amount.currency) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         if self.reserve0().quotient().is_zero() || self.reserve1().quotient().is_zero() {
             return Err(Error::InsufficientReserves.into());
@@ -240,7 +242,7 @@ impl Pair {
         calculate_fot_fees: bool,
     ) -> Result<(CurrencyAmount<Token>, Self)> {
         if !self.involves_token(&output_amount.currency) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         let percent_after_buy_fees = if calculate_fot_fees {
             self.derive_percent_after_buy_fees(output_amount)?
@@ -315,7 +317,7 @@ impl Pair {
         token_amount_b: &CurrencyAmount<Token>,
     ) -> Result<CurrencyAmount<Token>> {
         if !total_supply.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
         let token_amounts = if token_amount_a
             .currency
@@ -328,7 +330,7 @@ impl Pair {
         if !token_amounts.0.currency.equals(self.token0())
             || !token_amounts.1.currency.equals(self.token1())
         {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
 
         let liquidity = if total_supply.quotient().is_zero() {
@@ -357,16 +359,16 @@ impl Pair {
         k_last: Option<BigInt>,
     ) -> Result<CurrencyAmount<Token>> {
         if !self.involves_token(token) {
-            return Err(anyhow!("TOKEN"));
+            bail!("TOKEN");
         }
         if !total_supply.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("TOTAL_SUPPLY"));
+            bail!("TOTAL_SUPPLY");
         }
         if !liquidity.currency.equals(&self.liquidity_token) {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
         if liquidity.quotient() > total_supply.quotient() {
-            return Err(anyhow!("LIQUIDITY"));
+            bail!("LIQUIDITY");
         }
 
         let total_supply_adjusted = if !fee_on {
@@ -390,7 +392,7 @@ impl Pair {
                 }
             }
         } else {
-            return Err(anyhow!("K_LAST"));
+            bail!("K_LAST");
         };
 
         let result = liquidity.quotient() * self.reserve_of(token)?.quotient()

@@ -16,7 +16,7 @@ pub struct Route<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
 }
 
 impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Route<TInput, TOutput> {
-    /// Creates an instance of route.
+    /// Creates an instance of [`Route`].
     ///
     /// ## Arguments
     ///
@@ -97,5 +97,81 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Route<TInput, TOutput> {
             price.numerator(),
         ));
         Ok(self._mid_price.clone().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use once_cell::sync::Lazy;
+    use uniswap_sdk_core::token;
+
+    static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));
+    static TOKEN0: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
+    static TOKEN1: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
+    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
+    static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 200).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_0_WETH: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            CurrencyAmount::from_raw_amount(WETH.clone(), 100).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_1_WETH: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 175).unwrap(),
+            CurrencyAmount::from_raw_amount(WETH.clone(), 100).unwrap(),
+        )
+        .unwrap()
+    });
+
+    #[test]
+    fn constructs_a_path_from_the_tokens() {
+        let route = Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone());
+        assert_eq!(route.pairs, vec![PAIR_0_1.clone()]);
+        assert_eq!(route.path, vec![TOKEN0.clone(), TOKEN1.clone()]);
+        assert_eq!(route.input, TOKEN0.clone());
+        assert_eq!(route.output, TOKEN1.clone());
+        assert_eq!(route.chain_id(), 1);
+    }
+
+    #[test]
+    fn can_have_a_token_as_both_input_and_output() {
+        let route = Route::new(
+            vec![PAIR_0_WETH.clone(), PAIR_0_1.clone(), PAIR_1_WETH.clone()],
+            WETH.clone(),
+            WETH.clone(),
+        );
+        assert_eq!(
+            route.pairs,
+            vec![PAIR_0_WETH.clone(), PAIR_0_1.clone(), PAIR_1_WETH.clone()]
+        );
+        assert_eq!(route.input, WETH.clone());
+        assert_eq!(route.output, WETH.clone());
+    }
+
+    #[test]
+    fn supports_ether_input() {
+        let route = Route::new(vec![PAIR_0_WETH.clone()], ETHER.clone(), TOKEN0.clone());
+        assert_eq!(route.pairs, vec![PAIR_0_WETH.clone()]);
+        assert_eq!(route.input, ETHER.clone());
+        assert_eq!(route.output, TOKEN0.clone());
+    }
+
+    #[test]
+    fn supports_ether_output() {
+        let route = Route::new(vec![PAIR_0_WETH.clone()], TOKEN0.clone(), ETHER.clone());
+        assert_eq!(route.pairs, vec![PAIR_0_WETH.clone()]);
+        assert_eq!(route.input, TOKEN0.clone());
+        assert_eq!(route.output, ETHER.clone());
     }
 }
