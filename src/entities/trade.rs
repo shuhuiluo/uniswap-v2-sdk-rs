@@ -1,5 +1,6 @@
 use crate::prelude::Route;
-use uniswap_sdk_core::prelude::*;
+use anyhow::Result;
+use uniswap_sdk_core::prelude::{compute_price_impact::compute_price_impact, *};
 
 /// Comparator function to allow sorting of trades by their output amounts, in decreasing order, and
 /// then input amounts in increasing order. i.e. the best trades have the most outputs for the least
@@ -82,4 +83,154 @@ pub struct Trade<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
     /// The percent difference between the mid price before the trade and the trade execution
     /// price.
     pub price_impact: Percent,
+}
+
+impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
+    pub fn new(
+        route: Route<TInput, TOutput>,
+        amount: CurrencyAmount<impl CurrencyTrait>,
+        trade_type: TradeType,
+    ) -> Result<Self> {
+        let len = route.path.len();
+        let mut token_amounts: Vec<CurrencyAmount<Token>> = Vec::with_capacity(len);
+        let input_amount: CurrencyAmount<TInput>;
+        let output_amount: CurrencyAmount<TOutput>;
+        if trade_type == TradeType::ExactInput {
+            assert!(amount.currency.equals(&route.input), "INPUT");
+            token_amounts[0] = amount.wrapped()?;
+            for i in 0..len - 1 {
+                let pair = &route.pairs[i];
+                let (output_amount, _) = pair.get_output_amount(&token_amounts[i], false)?;
+                token_amounts[i + 1] = output_amount;
+            }
+            input_amount = CurrencyAmount::from_fractional_amount(
+                route.input.clone(),
+                amount.numerator(),
+                amount.denominator(),
+            )?;
+            output_amount = CurrencyAmount::from_fractional_amount(
+                route.output.clone(),
+                token_amounts[len - 1].numerator(),
+                token_amounts[len - 1].denominator(),
+            )?;
+        } else {
+            assert!(amount.currency.equals(&route.output), "OUTPUT");
+            token_amounts[len - 1] = amount.wrapped()?;
+            for i in (1..len).rev() {
+                let pair = &route.pairs[i - 1];
+                let (input_amount, _) = pair.get_input_amount(&token_amounts[i], false)?;
+                token_amounts[i - 1] = input_amount;
+            }
+            input_amount = CurrencyAmount::from_fractional_amount(
+                route.input.clone(),
+                token_amounts[0].numerator(),
+                token_amounts[0].denominator(),
+            )?;
+            output_amount = CurrencyAmount::from_fractional_amount(
+                route.output.clone(),
+                amount.numerator(),
+                amount.denominator(),
+            )?;
+        }
+        let execution_price = Price::new(
+            input_amount.currency.clone(),
+            output_amount.currency.clone(),
+            input_amount.quotient(),
+            output_amount.quotient(),
+        );
+        let price_impact = compute_price_impact(
+            route.clone().mid_price()?,
+            input_amount.clone(),
+            output_amount.clone(),
+        )?;
+        Ok(Trade {
+            route,
+            trade_type,
+            input_amount,
+            output_amount,
+            execution_price,
+            price_impact,
+        })
+    }
+
+    /// Constructs an exact in trade with the given amount in and route
+    ///
+    /// ## Arguments
+    ///
+    /// * `route`: The route of the exact in trade
+    /// * `amount_in`: The amount being passed in
+    pub fn exact_in(
+        route: Route<TInput, TOutput>,
+        amount_in: CurrencyAmount<TInput>,
+    ) -> Result<Self> {
+        Trade::new(route, amount_in, TradeType::ExactInput)
+    }
+
+    /// Constructs an exact out trade with the given amount out and route
+    ///
+    /// ## Arguments
+    ///
+    /// * `route`: The route of the exact out trade
+    /// * `amount_out`: The amount returned by the trade
+    pub fn exact_out(
+        route: Route<TInput, TOutput>,
+        amount_out: CurrencyAmount<TOutput>,
+    ) -> Result<Self> {
+        Trade::new(route, amount_out, TradeType::ExactOutput)
+    }
+
+    /// Get the minimum amount that must be received from this trade for the given slippage
+    /// tolerance
+    ///
+    /// ## Arguments
+    ///
+    /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
+    ///   this trade
+    pub fn minimum_amount_out(
+        &mut self,
+        slippage_tolerance: Percent,
+    ) -> Result<CurrencyAmount<TOutput>> {
+        assert!(
+            slippage_tolerance >= Percent::new(0, 1),
+            "SLIPPAGE_TOLERANCE"
+        );
+        if self.trade_type == TradeType::ExactOutput {
+            return Ok(self.output_amount.clone());
+        }
+        let slippage_adjusted_amount_out = ((Percent::new(1, 1) + slippage_tolerance).invert()
+            * Percent::new(self.output_amount.quotient(), 1))
+        .quotient();
+        CurrencyAmount::from_raw_amount(
+            self.output_amount.currency.clone(),
+            slippage_adjusted_amount_out,
+        )
+        .map_err(|e| e.into())
+    }
+
+    /// Get the maximum amount in that can be spent via this trade for the given slippage tolerance
+    ///
+    /// ## Arguments
+    ///
+    /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
+    ///   this trade
+    pub fn maximum_amount_in(
+        &mut self,
+        slippage_tolerance: Percent,
+    ) -> Result<CurrencyAmount<TInput>> {
+        assert!(
+            slippage_tolerance >= Percent::new(0, 1),
+            "SLIPPAGE_TOLERANCE"
+        );
+        if self.trade_type == TradeType::ExactInput {
+            return Ok(self.input_amount.clone());
+        }
+        let slippage_adjusted_amount_in = ((Percent::new(1, 1) + slippage_tolerance)
+            * Percent::new(self.input_amount.quotient(), 1))
+        .quotient();
+        CurrencyAmount::from_raw_amount(
+            self.input_amount.currency.clone(),
+            slippage_adjusted_amount_in,
+        )
+        .map_err(|e| e.into())
+    }
 }
