@@ -93,16 +93,16 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
         trade_type: TradeType,
     ) -> Result<Self> {
         let len = route.path.len();
-        let mut token_amounts: Vec<CurrencyAmount<Token>> = Vec::with_capacity(len);
+        let mut token_amount: CurrencyAmount<Token>;
         let input_amount: CurrencyAmount<TInput>;
         let output_amount: CurrencyAmount<TOutput>;
         if trade_type == TradeType::ExactInput {
             assert!(amount.currency.equals(&route.input), "INPUT");
-            token_amounts[0] = amount.wrapped()?;
+            token_amount = amount.wrapped()?;
             for i in 0..len - 1 {
                 let pair = &route.pairs[i];
-                let (output_amount, _) = pair.get_output_amount(&token_amounts[i], false)?;
-                token_amounts[i + 1] = output_amount;
+                let (output_amount, _) = pair.get_output_amount(&token_amount, false)?;
+                token_amount = output_amount;
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
@@ -111,21 +111,21 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
             )?;
             output_amount = CurrencyAmount::from_fractional_amount(
                 route.output.clone(),
-                token_amounts[len - 1].numerator(),
-                token_amounts[len - 1].denominator(),
+                token_amount.numerator(),
+                token_amount.denominator(),
             )?;
         } else {
             assert!(amount.currency.equals(&route.output), "OUTPUT");
-            token_amounts[len - 1] = amount.wrapped()?;
+            token_amount = amount.wrapped()?;
             for i in (1..len).rev() {
                 let pair = &route.pairs[i - 1];
-                let (input_amount, _) = pair.get_input_amount(&token_amounts[i], false)?;
-                token_amounts[i - 1] = input_amount;
+                let (input_amount, _) = pair.get_input_amount(&token_amount, false)?;
+                token_amount = input_amount;
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
-                token_amounts[0].numerator(),
-                token_amounts[0].denominator(),
+                token_amount.numerator(),
+                token_amount.denominator(),
             )?;
             output_amount = CurrencyAmount::from_fractional_amount(
                 route.output.clone(),
@@ -430,5 +430,124 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
             }
         }
         Ok(best_trades)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use once_cell::sync::Lazy;
+    use uniswap_sdk_core::token;
+
+    static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));
+    static TOKEN0: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
+    static TOKEN1: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
+    static TOKEN2: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000003", 18, "t2"));
+    static TOKEN3: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000004", 18, "t3"));
+    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
+    static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1000).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_0_2: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1100).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_0_3: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 900).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_1_2: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1200).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1000).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_1_3: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1200).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 1300).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_WETH_0: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(WETH.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
+        )
+        .unwrap()
+    });
+    static EMPTY_PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 0).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 0).unwrap(),
+        )
+        .unwrap()
+    });
+
+    mod new {
+        use super::*;
+
+        #[test]
+        fn can_be_constructed_with_ether_as_input() {
+            let trade = Trade::new(
+                Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
+                CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+                TradeType::ExactInput,
+            )
+            .unwrap();
+            assert_eq!(trade.input_amount.currency, ETHER.clone());
+            assert_eq!(trade.output_amount.currency, TOKEN0.clone());
+        }
+
+        #[test]
+        fn can_be_constructed_with_ether_as_input_for_exact_output() {
+            let trade = Trade::new(
+                Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
+                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+                TradeType::ExactOutput,
+            )
+            .unwrap();
+            assert_eq!(trade.input_amount.currency, ETHER.clone());
+            assert_eq!(trade.output_amount.currency, TOKEN0.clone());
+        }
+
+        #[test]
+        fn can_be_constructed_with_ether_as_output() {
+            let trade = Trade::new(
+                Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
+                CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+                TradeType::ExactOutput,
+            )
+            .unwrap();
+            assert_eq!(trade.input_amount.currency, TOKEN0.clone());
+            assert_eq!(trade.output_amount.currency, ETHER.clone());
+        }
+
+        #[test]
+        fn can_be_constructed_with_ether_as_output_for_exact_input() {
+            let trade = Trade::new(
+                Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
+                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+                TradeType::ExactInput,
+            )
+            .unwrap();
+            assert_eq!(trade.input_amount.currency, TOKEN0.clone());
+            assert_eq!(trade.output_amount.currency, ETHER.clone());
+        }
     }
 }

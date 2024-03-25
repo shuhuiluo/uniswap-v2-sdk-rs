@@ -443,7 +443,7 @@ mod tests {
     static USDC: Lazy<Token> = Lazy::new(|| {
         token!(
             1,
-            "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+            "A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
             18,
             "USDC",
             "USD Coin"
@@ -452,7 +452,7 @@ mod tests {
     static DAI: Lazy<Token> = Lazy::new(|| {
         token!(
             1,
-            "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+            "6B175474E89094C44Da98b954EedeAC495271d0F",
             18,
             "DAI",
             "DAI Stablecoin"
@@ -496,7 +496,7 @@ mod tests {
         static USDC_SEPOLIA: Lazy<Token> = Lazy::new(|| {
             token!(
                 11155111,
-                "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+                "A0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
                 18,
                 "USDC",
                 "USD Coin"
@@ -505,7 +505,7 @@ mod tests {
         static DAI_SEPOLIA: Lazy<Token> = Lazy::new(|| {
             token!(
                 11155111,
-                "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+                "6B175474E89094C44Da98b954EedeAC495271d0F",
                 18,
                 "DAI",
                 "DAI Stablecoin"
@@ -538,7 +538,7 @@ mod tests {
             assert_eq!(
                 Pair::get_address(&USDC_SEPOLIA, &DAI_SEPOLIA),
                 compute_pair_address(
-                    FACTORY_ADDRESS,
+                    *FACTORY_ADDRESS_MAP.get(&11155111).unwrap(),
                     USDC_SEPOLIA.address(),
                     DAI_SEPOLIA.address(),
                 )
@@ -704,7 +704,7 @@ mod tests {
             static BLAST: Lazy<Token> = Lazy::new(|| {
                 Token::new(
                     1,
-                    "0x3ed643e9032230f01c6c36060e305ab53ad3b482".to_string(),
+                    address!("3ed643e9032230f01c6c36060e305ab53ad3b482"),
                     18,
                     Some("BLAST".to_string()),
                     Some("BLAST".to_string()),
@@ -716,7 +716,7 @@ mod tests {
             static BLAST_WIHTOUT_TAX: Lazy<Token> = Lazy::new(|| {
                 token!(
                     1,
-                    "0x3ed643e9032230f01c6c36060e305ab53ad3b482",
+                    "3ed643e9032230f01c6c36060e305ab53ad3b482",
                     18,
                     "BLAST",
                     "BLAST"
@@ -730,7 +730,7 @@ mod tests {
             static BLASTERS: Lazy<Token> = Lazy::new(|| {
                 Token::new(
                     1,
-                    "0xab98093C7232E98A47D7270CE0c1c2106f61C73b".to_string(),
+                    address!("ab98093C7232E98A47D7270CE0c1c2106f61C73b"),
                     9,
                     Some("BLAST".to_string()),
                     Some("BLASTERS".to_string()),
@@ -742,7 +742,7 @@ mod tests {
             static BLASTERS_WITHOUT_TAX: Lazy<Token> = Lazy::new(|| {
                 token!(
                     1,
-                    "0xab98093C7232E98A47D7270CE0c1c2106f61C73b",
+                    "ab98093C7232E98A47D7270CE0c1c2106f61C73b",
                     9,
                     "BLAST",
                     "BLASTERS"
@@ -833,8 +833,8 @@ mod tests {
 
             #[test]
             fn get_liquidity_minted_0() {
-                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
-                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let token_a = token!(3, "0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0000000000000000000000000000000000000002", 18);
                 let pair = Pair::new(
                     CurrencyAmount::from_raw_amount(token_a.clone(), 0).unwrap(),
                     CurrencyAmount::from_raw_amount(token_b.clone(), 0).unwrap(),
@@ -878,8 +878,8 @@ mod tests {
 
             #[test]
             fn get_liquidity_minted_not_0() {
-                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
-                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let token_a = token!(3, "0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0000000000000000000000000000000000000002", 18);
                 let pair = Pair::new(
                     CurrencyAmount::from_raw_amount(token_a.clone(), 10000).unwrap(),
                     CurrencyAmount::from_raw_amount(token_b.clone(), 10000).unwrap(),
@@ -902,8 +902,8 @@ mod tests {
 
             #[test]
             fn get_liquidity_value_not_fee_on() {
-                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
-                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let token_a = token!(3, "0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0000000000000000000000000000000000000002", 18);
                 let pair = Pair::new(
                     CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
                     CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
@@ -955,8 +955,8 @@ mod tests {
 
             #[test]
             fn get_liquidity_value_fee_on() {
-                let token_a = token!(3, "0x0000000000000000000000000000000000000001", 18);
-                let token_b = token!(3, "0x0000000000000000000000000000000000000002", 18);
+                let token_a = token!(3, "0000000000000000000000000000000000000001", 18);
+                let token_b = token!(3, "0000000000000000000000000000000000000002", 18);
                 let pair = Pair::new(
                     CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
                     CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
