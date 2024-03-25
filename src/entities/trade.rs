@@ -235,24 +235,23 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
         .map_err(|e| e.into())
     }
 
-    //   /**
-    //    * Given a list of pairs, and a fixed amount in, returns the top `maxNumResults` trades
-    //      that go from an input token
-    //    * amount to an output token, making at most `maxHops` hops.
-    //    * Note this does not consider aggregation, as routes are linear. It's possible a better
-    //      route exists by splitting
-    //    * the amount in among multiple routes.
-    //    * @param pairs the pairs to consider in finding the best trade
-    //    * @param nextAmountIn exact amount of input currency to spend
-    //    * @param currencyOut the desired currency out
-    //    * @param maxNumResults maximum number of results to return
-    //    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through
-    //      a single pair
-    //    * @param currentPairs used in recursion; the current list of pairs
-    //    * @param currencyAmountIn used in recursion; the original value of the currencyAmountIn
-    //      parameter
-    //    * @param bestTrades used in recursion; the current list of best trades
-    //    */
+    /// Given a list of pairs, and a fixed amount in, returns the top `max_num_results` trades that
+    /// go from an input token amount to an output token, making at most `max_hops` hops.
+    ///
+    /// Note this does not consider aggregation, as routes are linear. It's possible a better route
+    /// exists by splitting the amount in among multiple routes.
+    ///
+    /// ## Arguments
+    ///
+    /// * `pairs`: The pairs to consider in finding the best trade
+    /// * `currency_amount_in`: The exact amount of input currency to spend
+    /// * `currency_out`: The desired currency out
+    /// * `best_trade_options`: Maximum number of results to return and maximum number of hops a
+    ///   returned trade can make, e.g. 1 hop goes through a single pair
+    /// * `current_pairs`: Used in recursion; the current list of pairs
+    /// * `next_amount_in`: Used in recursion; the original value of the currency_amount_in
+    ///   parameter
+    /// * `best_trades`: Used in recursion; the current list of best trades
     pub fn best_trade_exact_in(
         pairs: Vec<Pair>,
         currency_amount_in: CurrencyAmount<TInput>,
@@ -319,6 +318,113 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
                     },
                     next_pairs,
                     Some(amount_out),
+                    best_trades,
+                )?;
+            }
+        }
+        Ok(best_trades)
+    }
+
+    /// Return the execution price after accounting for slippage tolerance
+    ///
+    /// ## Arguments
+    ///
+    /// * `slippage_tolerance`: The allowed tolerated slippage
+    pub fn worst_execution_price(
+        &mut self,
+        slippage_tolerance: Percent,
+    ) -> Result<Price<TInput, TOutput>> {
+        Ok(Price::new(
+            self.input_amount.currency.clone(),
+            self.output_amount.currency.clone(),
+            self.maximum_amount_in(slippage_tolerance.clone())?
+                .quotient(),
+            self.minimum_amount_out(slippage_tolerance)?.quotient(),
+        ))
+    }
+
+    /// Given a list of pairs, and a fixed amount out, returns the top `max_num_results` trades that
+    /// go from an input token to an output token amount, making at most `max_hops` hops.
+    ///
+    /// Note this does not consider aggregation, as routes are linear. It's possible a better route
+    /// exists by splitting the amount in among multiple routes.
+    ///
+    /// ## Arguments
+    ///
+    /// * `pairs`: The pairs to consider in finding the best trade
+    /// * `currency_in`: The currency to spend
+    /// * `currency_amount_out`: The desired currency amount out
+    /// * `best_trade_options`: Maximum number of results to return and maximum number of hops a
+    ///   returned trade can make, e.g. 1 hop goes through a single pair
+    /// * `current_pairs`: Used in recursion; the current list of pairs
+    /// * `next_amount_out`: Used in recursion; the exact amount of currency out
+    /// * `best_trades`: Used in recursion; the current list of best trades
+    pub fn best_trade_exact_out(
+        pairs: Vec<Pair>,
+        currency_in: TInput,
+        currency_amount_out: CurrencyAmount<TOutput>,
+        best_trade_options: BestTradeOptions,
+        current_pairs: Vec<Pair>,
+        next_amount_out: Option<CurrencyAmount<Token>>,
+        best_trades: &mut Vec<Self>,
+    ) -> Result<&mut Vec<Self>> {
+        assert!(!pairs.is_empty(), "PAIRS");
+        let max_num_results = best_trade_options.max_num_results.unwrap_or(3);
+        let max_hops = best_trade_options.max_hops.unwrap_or(3);
+        assert!(max_hops > 0, "MAX_HOPS");
+        let amount_out = match next_amount_out {
+            Some(amount_out) => {
+                assert!(!current_pairs.is_empty(), "INVALID_RECURSION");
+                amount_out
+            }
+            None => currency_amount_out.wrapped()?,
+        };
+        let token_in = currency_in.wrapped();
+        for pair in pairs.iter() {
+            // pair irrelevant
+            if !pair.token0().equals(&amount_out.currency)
+                && !pair.token1().equals(&amount_out.currency)
+            {
+                continue;
+            }
+            if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
+                continue;
+            }
+            let (amount_in, _) = pair.get_input_amount(&amount_out, false)?;
+            // we have arrived at the input token, so this is the first trade of one of the paths
+            if amount_in.currency.equals(&token_in) {
+                let mut next_pairs = vec![pair.clone()];
+                next_pairs.extend(current_pairs.clone());
+                let trade = Self::new(
+                    Route::new(
+                        next_pairs,
+                        currency_in.clone(),
+                        currency_amount_out.currency.clone(),
+                    ),
+                    currency_amount_out.wrapped()?,
+                    TradeType::ExactOutput,
+                )?;
+                sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
+            } else if max_hops > 1 && pairs.len() > 1 {
+                let pairs_excluding_this_pair = pairs
+                    .iter()
+                    .filter(|&p| p.address() != pair.address())
+                    .cloned()
+                    .collect();
+                // otherwise, consider all the other paths that arrive at this token as long as we
+                // have not exceeded maxHops
+                let mut next_pairs = vec![pair.clone()];
+                next_pairs.extend(current_pairs.clone());
+                Self::best_trade_exact_out(
+                    pairs_excluding_this_pair,
+                    currency_in.clone(),
+                    currency_amount_out.clone(),
+                    BestTradeOptions {
+                        max_num_results: Some(max_num_results),
+                        max_hops: Some(max_hops - 1),
+                    },
+                    next_pairs,
+                    Some(amount_in),
                     best_trades,
                 )?;
             }
