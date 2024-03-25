@@ -1,5 +1,6 @@
-use crate::prelude::Route;
+use crate::prelude::{Pair, Route};
 use anyhow::Result;
+use uniswap_sdk_core::prelude::sorted_insert::sorted_insert;
 use uniswap_sdk_core::prelude::{compute_price_impact::compute_price_impact, *};
 
 /// Comparator function to allow sorting of trades by their output amounts, in decreasing order, and
@@ -232,5 +233,96 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
             slippage_adjusted_amount_in,
         )
         .map_err(|e| e.into())
+    }
+
+    //   /**
+    //    * Given a list of pairs, and a fixed amount in, returns the top `maxNumResults` trades
+    //      that go from an input token
+    //    * amount to an output token, making at most `maxHops` hops.
+    //    * Note this does not consider aggregation, as routes are linear. It's possible a better
+    //      route exists by splitting
+    //    * the amount in among multiple routes.
+    //    * @param pairs the pairs to consider in finding the best trade
+    //    * @param nextAmountIn exact amount of input currency to spend
+    //    * @param currencyOut the desired currency out
+    //    * @param maxNumResults maximum number of results to return
+    //    * @param maxHops maximum number of hops a returned trade can make, e.g. 1 hop goes through
+    //      a single pair
+    //    * @param currentPairs used in recursion; the current list of pairs
+    //    * @param currencyAmountIn used in recursion; the original value of the currencyAmountIn
+    //      parameter
+    //    * @param bestTrades used in recursion; the current list of best trades
+    //    */
+    pub fn best_trade_exact_in(
+        pairs: Vec<Pair>,
+        currency_amount_in: CurrencyAmount<TInput>,
+        currency_out: TOutput,
+        best_trade_options: BestTradeOptions,
+        current_pairs: Vec<Pair>,
+        next_amount_in: Option<CurrencyAmount<Token>>,
+        best_trades: &mut Vec<Self>,
+    ) -> Result<&mut Vec<Self>> {
+        assert!(!pairs.is_empty(), "PAIRS");
+        let max_num_results = best_trade_options.max_num_results.unwrap_or(3);
+        let max_hops = best_trade_options.max_hops.unwrap_or(3);
+        assert!(max_hops > 0, "MAX_HOPS");
+        let amount_in = match next_amount_in {
+            Some(amount_in) => {
+                assert!(!current_pairs.is_empty(), "INVALID_RECURSION");
+                amount_in
+            }
+            None => currency_amount_in.wrapped()?,
+        };
+        let token_out = currency_out.wrapped();
+        for pair in pairs.iter() {
+            // pair irrelevant
+            if !pair.token0().equals(&amount_in.currency)
+                && !pair.token1().equals(&amount_in.currency)
+            {
+                continue;
+            }
+            if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
+                continue;
+            }
+            let (amount_out, _) = pair.get_output_amount(&amount_in, false)?;
+            // we have arrived at the output token, so this is the final trade of one of the paths
+            if amount_out.currency.equals(&token_out) {
+                let mut next_pairs = current_pairs.clone();
+                next_pairs.push(pair.clone());
+                let trade = Self::new(
+                    Route::new(
+                        next_pairs,
+                        currency_amount_in.currency.clone(),
+                        currency_out.clone(),
+                    ),
+                    currency_amount_in.wrapped()?,
+                    TradeType::ExactInput,
+                )?;
+                sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
+            } else if max_hops > 1 && pairs.len() > 1 {
+                let pairs_excluding_this_pair = pairs
+                    .iter()
+                    .filter(|&p| p.address() != pair.address())
+                    .cloned()
+                    .collect();
+                // otherwise, consider all the other paths that lead from this token as long as we
+                // have not exceeded maxHops
+                let mut next_pairs = current_pairs.clone();
+                next_pairs.push(pair.clone());
+                Self::best_trade_exact_in(
+                    pairs_excluding_this_pair,
+                    currency_amount_in.clone(),
+                    currency_out.clone(),
+                    BestTradeOptions {
+                        max_num_results: Some(max_num_results),
+                        max_hops: Some(max_hops - 1),
+                    },
+                    next_pairs,
+                    Some(amount_out),
+                    best_trades,
+                )?;
+            }
+        }
+        Ok(best_trades)
     }
 }
