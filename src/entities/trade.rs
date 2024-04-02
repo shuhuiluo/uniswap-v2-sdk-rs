@@ -93,12 +93,11 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
         trade_type: TradeType,
     ) -> Result<Self> {
         let len = route.path.len();
-        let mut token_amount: CurrencyAmount<Token>;
+        let mut token_amount: CurrencyAmount<Token> = amount.wrapped()?;
         let input_amount: CurrencyAmount<TInput>;
         let output_amount: CurrencyAmount<TOutput>;
         if trade_type == TradeType::ExactInput {
             assert!(amount.currency.equals(&route.input), "INPUT");
-            token_amount = amount.wrapped()?;
             for i in 0..len - 1 {
                 let pair = &route.pairs[i];
                 let (output_amount, _) = pair.get_output_amount(&token_amount, false)?;
@@ -116,7 +115,6 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
             )?;
         } else {
             assert!(amount.currency.equals(&route.output), "OUTPUT");
-            token_amount = amount.wrapped()?;
             for i in (1..len).rev() {
                 let pair = &route.pairs[i - 1];
                 let (input_amount, _) = pair.get_input_amount(&token_amount, false)?;

@@ -38,7 +38,8 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Route<TInput, TOutput> {
             "OUTPUT"
         );
 
-        let mut path: Vec<Token> = vec![wrapped_input];
+        let mut path: Vec<Token> = Vec::with_capacity(pairs.len() + 1);
+        path.push(wrapped_input);
         for (i, pair) in pairs.iter().enumerate() {
             let current_input = &path[i];
             assert!(
