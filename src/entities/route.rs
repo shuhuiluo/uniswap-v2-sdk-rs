@@ -1,4 +1,4 @@
-use crate::prelude::Pair;
+use crate::{errors::Error, prelude::Pair};
 use alloy_primitives::ChainId;
 use anyhow::Result;
 use uniswap_sdk_core::prelude::*;
@@ -85,10 +85,14 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Route<TInput, TOutput> {
         for pair in self.pairs[1..].iter() {
             if next_input.equals(pair.token0()) {
                 next_input = pair.token1();
-                price = price.multiply(&pair.token0_price())?;
+                price = price
+                    .multiply(&pair.token0_price())
+                    .map_err(|_| Error::PriceCalculationFailed)?;
             } else {
                 next_input = pair.token0();
-                price = price.multiply(&pair.token1_price())?;
+                price = price
+                    .multiply(&pair.token1_price())
+                    .map_err(|_| Error::PriceCalculationFailed)?;
             }
         }
         self._mid_price = Some(Price::new(

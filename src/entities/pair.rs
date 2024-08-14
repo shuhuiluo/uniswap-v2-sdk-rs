@@ -1,8 +1,7 @@
 use crate::{constants::*, errors::Error};
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
-use anyhow::{anyhow, bail, Result};
-use uniswap_sdk_core::{prelude::*, token};
+use uniswap_sdk_core::{error::Error as SdkError, prelude::*, token};
 
 /// Computes the address of a Uniswap V2 pair
 ///
@@ -54,7 +53,7 @@ impl Pair {
     pub fn new(
         currency_amount_a: CurrencyAmount<Token>,
         token_amount_b: CurrencyAmount<Token>,
-    ) -> Result<Self> {
+    ) -> Result<Self, SdkError> {
         let token_amounts = if currency_amount_a
             .currency
             .sorts_before(&token_amount_b.currency)?
@@ -119,7 +118,7 @@ impl Pair {
     /// ## Arguments
     ///
     /// * `token`: token to return price of
-    pub fn price_of(&self, token: &Token) -> Result<Price<Token, Token>> {
+    pub fn price_of(&self, token: &Token) -> Result<Price<Token, Token>, Error> {
         if self.involves_token(token) {
             Ok(if token.equals(self.token0()) {
                 self.token0_price()
@@ -127,7 +126,7 @@ impl Pair {
                 self.token1_price()
             })
         } else {
-            Err(anyhow!("TOKEN"))
+            Err(Error::TokenNotInPair)
         }
     }
 
@@ -151,7 +150,7 @@ impl Pair {
         &self.token_amounts[1]
     }
 
-    pub fn reserve_of(&self, token: &Token) -> Result<&CurrencyAmount<Token>> {
+    pub fn reserve_of(&self, token: &Token) -> Result<&CurrencyAmount<Token>, Error> {
         if self.involves_token(token) {
             Ok(if token.equals(self.token0()) {
                 self.reserve0()
@@ -159,7 +158,7 @@ impl Pair {
                 self.reserve1()
             })
         } else {
-            Err(anyhow!("TOKEN"))
+            Err(Error::TokenNotInPair)
         }
     }
 
@@ -167,12 +166,12 @@ impl Pair {
         &self,
         input_amount: &CurrencyAmount<Token>,
         calculate_fot_fees: bool,
-    ) -> Result<(CurrencyAmount<Token>, Self)> {
+    ) -> Result<(CurrencyAmount<Token>, Self), Error> {
         if !self.involves_token(&input_amount.currency) {
-            bail!("TOKEN");
+            return Err(Error::TokenNotInPair);
         }
         if self.reserve0().quotient().is_zero() || self.reserve1().quotient().is_zero() {
-            return Err(Error::InsufficientReserves.into());
+            return Err(Error::InsufficientReserves);
         }
         let input_reserve = self.reserve_of(&input_amount.currency)?;
         let output_reserve = self.reserve_of(if input_amount.currency.equals(self.token0()) {
@@ -190,7 +189,8 @@ impl Pair {
             CurrencyAmount::from_raw_amount(
                 input_amount.currency.clone(),
                 (percent_after_sell_fees.as_fraction() * input_amount.as_fraction()).quotient(),
-            )?
+            )
+            .map_err(|_| Error::CurrencyAmountError)?
         } else {
             input_amount.clone()
         };
@@ -206,10 +206,11 @@ impl Pair {
                 self.token0().clone()
             },
             numerator / denominator,
-        )?;
+        )
+        .map_err(|_| Error::CurrencyAmountError)?;
 
         if output_amount.quotient().is_zero() {
-            return Err(Error::InsufficientInputAmount.into());
+            return Err(Error::InsufficientInputAmount);
         }
 
         let percent_after_buy_fees = if calculate_fot_fees {
@@ -221,18 +222,24 @@ impl Pair {
             CurrencyAmount::from_raw_amount(
                 output_amount.currency.clone(),
                 (percent_after_buy_fees.as_fraction() * output_amount.as_fraction()).quotient(),
-            )?
+            )
+            .map_err(|_| Error::CurrencyAmountError)?
         } else {
             output_amount.clone()
         };
         if output_amount_after_tax.quotient().is_zero() {
-            return Err(Error::InsufficientInputAmount.into());
+            return Err(Error::InsufficientInputAmount);
         }
 
         let pair = Self::new(
-            input_reserve.add(&input_amount_after_tax)?,
-            output_reserve.subtract(&output_amount_after_tax)?,
-        )?;
+            input_reserve
+                .add(&input_amount_after_tax)
+                .map_err(|_| Error::ArithmeticError)?,
+            output_reserve
+                .subtract(&output_amount_after_tax)
+                .map_err(|_| Error::ArithmeticError)?,
+        )
+        .map_err(|_| Error::ArithmeticError)?;
         Ok((output_amount_after_tax, pair))
     }
 
@@ -240,9 +247,9 @@ impl Pair {
         &self,
         output_amount: &CurrencyAmount<Token>,
         calculate_fot_fees: bool,
-    ) -> Result<(CurrencyAmount<Token>, Self)> {
+    ) -> Result<(CurrencyAmount<Token>, Self), Error> {
         if !self.involves_token(&output_amount.currency) {
-            bail!("TOKEN");
+            return Err(Error::TokenNotInPair);
         }
         let percent_after_buy_fees = if calculate_fot_fees {
             self.derive_percent_after_buy_fees(output_amount)?
@@ -254,7 +261,8 @@ impl Pair {
                 output_amount.currency.clone(),
                 (output_amount.as_fraction() / percent_after_buy_fees.as_fraction()).quotient()
                     + BigInt::from(1),
-            )?
+            )
+            .map_err(|_| Error::CurrencyAmountError)?
         } else {
             output_amount.clone()
         };
@@ -265,7 +273,7 @@ impl Pair {
             || output_amount_before_tax.quotient()
                 >= self.reserve_of(&output_amount.currency)?.quotient()
         {
-            return Err(Error::InsufficientReserves.into());
+            return Err(Error::InsufficientReserves);
         }
 
         let output_reserve = self.reserve_of(&output_amount.currency)?;
@@ -286,7 +294,8 @@ impl Pair {
                 self.token0().clone()
             },
             numerator / denominator + BigInt::from(1),
-        )?;
+        )
+        .map_err(|_| Error::CurrencyAmountError)?;
 
         let percent_after_sell_fees = if calculate_fot_fees {
             self.derive_percent_after_sell_fees(&input_amount)?
@@ -298,15 +307,21 @@ impl Pair {
                 input_amount.currency.clone(),
                 (input_amount.as_fraction() / percent_after_sell_fees.as_fraction()).quotient()
                     + BigInt::from(1),
-            )?
+            )
+            .map_err(|_| Error::CurrencyAmountError)?
         } else {
             input_amount.clone()
         };
 
         let pair = Self::new(
-            input_reserve.add(&input_amount)?,
-            output_reserve.subtract(output_amount)?,
-        )?;
+            input_reserve
+                .add(&input_amount)
+                .map_err(|_| Error::ArithmeticError)?,
+            output_reserve
+                .subtract(output_amount)
+                .map_err(|_| Error::ArithmeticError)?,
+        )
+        .map_err(|_| Error::ArithmeticError)?;
         Ok((input_amount_before_tax, pair))
     }
 
@@ -315,13 +330,14 @@ impl Pair {
         total_supply: &CurrencyAmount<Token>,
         token_amount_a: &CurrencyAmount<Token>,
         token_amount_b: &CurrencyAmount<Token>,
-    ) -> Result<CurrencyAmount<Token>> {
+    ) -> Result<CurrencyAmount<Token>, Error> {
         if !total_supply.currency.equals(&self.liquidity_token) {
-            bail!("LIQUIDITY");
+            return Err(Error::NotEqual());
         }
         let token_amounts = if token_amount_a
             .currency
-            .sorts_before(&token_amount_b.currency)?
+            .sorts_before(&token_amount_b.currency)
+            .map_err(|_| Error::CurrencyAmountError)?
         {
             (token_amount_a, token_amount_b)
         } else {
@@ -330,7 +346,7 @@ impl Pair {
         if !token_amounts.0.currency.equals(self.token0())
             || !token_amounts.1.currency.equals(self.token1())
         {
-            bail!("TOKEN");
+            return Err(Error::NotEqual());
         }
 
         let liquidity = if total_supply.quotient().is_zero() {
@@ -344,10 +360,10 @@ impl Pair {
             amount0.min(amount1)
         };
         if liquidity.is_zero() {
-            return Err(Error::InsufficientInputAmount.into());
+            return Err(Error::InsufficientInputAmount);
         }
         CurrencyAmount::from_raw_amount(self.liquidity_token.clone(), liquidity)
-            .map_err(|_| anyhow!("LIQUIDITY"))
+            .map_err(|_| Error::CurrencyAmountError)
     }
 
     pub fn get_liquidity_value(
@@ -357,18 +373,18 @@ impl Pair {
         liquidity: &CurrencyAmount<Token>,
         fee_on: bool,
         k_last: Option<BigInt>,
-    ) -> Result<CurrencyAmount<Token>> {
+    ) -> Result<CurrencyAmount<Token>, Error> {
         if !self.involves_token(token) {
-            bail!("TOKEN");
+            return Err(Error::TokenNotInPair);
         }
         if !total_supply.currency.equals(&self.liquidity_token) {
-            bail!("TOTAL_SUPPLY");
+            return Err(Error::NotEqual());
         }
         if !liquidity.currency.equals(&self.liquidity_token) {
-            bail!("LIQUIDITY");
+            return Err(Error::NotEqual());
         }
         if liquidity.quotient() > total_supply.quotient() {
-            bail!("LIQUIDITY");
+            return Err(Error::InsufficientLiquidity);
         }
 
         let total_supply_adjusted = if !fee_on {
@@ -383,27 +399,33 @@ impl Pair {
                     let numerator = total_supply.quotient() * (&root_k - &root_k_last);
                     let denominator = root_k * FIVE.clone() + root_k_last;
                     let fee_liquidity = numerator / denominator;
-                    total_supply.add(&CurrencyAmount::from_raw_amount(
-                        self.liquidity_token.clone(),
-                        fee_liquidity,
-                    )?)?
+                    total_supply
+                        .add(
+                            &CurrencyAmount::from_raw_amount(
+                                self.liquidity_token.clone(),
+                                fee_liquidity,
+                            )
+                            .map_err(|_| Error::CurrencyAmountError)?,
+                        )
+                        .map_err(|_| Error::CurrencyAmountError)?
                 } else {
                     total_supply.clone()
                 }
             }
         } else {
-            bail!("K_LAST");
+            return Err(Error::Incorrect());
         };
 
         let result = liquidity.quotient() * self.reserve_of(token)?.quotient()
             / total_supply_adjusted.quotient();
-        CurrencyAmount::from_raw_amount(token.clone(), result).map_err(|_| anyhow!("TOKEN"))
+        CurrencyAmount::from_raw_amount(token.clone(), result)
+            .map_err(|_| Error::CurrencyAmountError)
     }
 
     fn derive_percent_after_sell_fees(
         &self,
         input_amount: &CurrencyAmount<Token>,
-    ) -> Result<Percent> {
+    ) -> Result<Percent, Error> {
         let sell_fee_bips = if self.token0().equals(&input_amount.currency.wrapped()) {
             self.token0().sell_fee_bps.clone()
         } else {
@@ -420,7 +442,7 @@ impl Pair {
     fn derive_percent_after_buy_fees(
         &self,
         output_amount: &CurrencyAmount<Token>,
-    ) -> Result<Percent> {
+    ) -> Result<Percent, Error> {
         let buy_fee_bips = if self.token0().equals(&output_amount.currency.wrapped()) {
             self.token0().buy_fee_bps.clone()
         } else {
@@ -767,7 +789,7 @@ mod tests {
                         .get_output_amount(&input_blasters_amount, true)
                         .unwrap();
 
-                    assert_eq!(output_blast_amount.to_exact(), "0.00000000000000009");
+                    assert_eq!(output_blast_amount.to_exact(), "9E-17");
                 }
 
                 #[test]
@@ -784,7 +806,7 @@ mod tests {
                     let (input_blaster_amount, _) =
                         pair.get_input_amount(&output_blast_amount, true).unwrap();
 
-                    assert_eq!(input_blaster_amount.to_exact(), "0.000000101");
+                    assert_eq!(input_blaster_amount.to_exact(), "1.01E-7");
                 }
             }
 
@@ -806,7 +828,7 @@ mod tests {
                         .get_output_amount(&input_blasters_amount, false)
                         .unwrap();
 
-                    assert_eq!(output_blast_amount.to_exact(), "0.000000000000000098");
+                    assert_eq!(output_blast_amount.to_exact(), "9.8E-17");
                 }
 
                 #[test]
@@ -823,7 +845,7 @@ mod tests {
                     let (input_blaster_amount, _) =
                         pair.get_input_amount(&output_blast_amount, false).unwrap();
 
-                    assert_eq!(input_blaster_amount.to_exact(), "0.000000093");
+                    assert_eq!(input_blaster_amount.to_exact(), "9.3E-8");
                 }
             }
         }
