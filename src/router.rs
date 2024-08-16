@@ -47,8 +47,8 @@ impl Router {
         max_hops: usize,
     ) -> Result<Option<Trade<TInput, TOutput>>>
     where
-        TInput: CurrencyTrait,
-        TOutput: CurrencyTrait,
+        TInput: Currency,
+        TOutput: Currency,
     {
         let input_token = input_amount.currency.wrapped();
         let output_token_wrapped = output_token.wrapped();

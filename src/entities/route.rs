@@ -5,7 +5,7 @@ use uniswap_sdk_core::prelude::*;
 
 /// Represents a list of pairs through which a swap can occur
 #[derive(Clone, PartialEq, Debug)]
-pub struct Route<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
+pub struct Route<TInput: Currency, TOutput: Currency> {
     pub pairs: Vec<Pair>,
     pub path: Vec<Token>,
     /// The input token
@@ -15,7 +15,7 @@ pub struct Route<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
     _mid_price: Option<Price<TInput, TOutput>>,
 }
 
-impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Route<TInput, TOutput> {
+impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
     /// Creates an instance of [`Route`].
     ///
     /// ## Arguments
