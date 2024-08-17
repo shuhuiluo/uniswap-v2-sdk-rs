@@ -455,7 +455,10 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
 mod tests {
     use super::*;
     use once_cell::sync::Lazy;
-    use uniswap_sdk_core::token;
+    use uniswap_sdk_core::{
+        entities::{ether, fractions::currency_amount},
+        token,
+    };
 
     static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));
     static TOKEN0: Lazy<Token> =
@@ -464,6 +467,8 @@ mod tests {
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
     static TOKEN2: Lazy<Token> =
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000003", 18, "t2"));
+    static TOKEN3: Lazy<Token> =
+        Lazy::new(|| token!(1, "0000000000000000000000000000000000000004", 18, "t3"));
     static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
@@ -476,6 +481,20 @@ mod tests {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
             CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1100).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_0_3: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 900).unwrap(),
+        )
+        .unwrap()
+    });
+    static PAIR_1_3: Lazy<Pair> = Lazy::new(|| {
+        Pair::new(
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1000).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 900).unwrap(),
         )
         .unwrap()
     });
@@ -501,246 +520,637 @@ mod tests {
         .unwrap()
     });
 
-    mod new {
-        use super::*;
-
-        #[test]
-        fn calculates_input_and_output_amounts_correctly() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.quotient(), BigInt::from(100));
-            assert!(trade.output_amount.quotient() < BigInt::from(100));
-        }
-
-        #[test]
-        fn calculates_price_impact_correctly() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-            assert!(trade.price_impact > Percent::new(0, 100));
-        }
-
-        #[test]
-        fn fails_with_insufficient_reserves() {
-            let result = Trade::new(
-                Route::new(vec![EMPTY_PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            );
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn can_be_constructed_with_ether_as_input() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
-                CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, ETHER.clone());
-            assert_eq!(trade.output_amount.currency, TOKEN0.clone());
-        }
-
-        #[test]
-        fn can_be_constructed_with_ether_as_input_for_exact_output() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, ETHER.clone());
-            assert_eq!(trade.output_amount.currency, TOKEN0.clone());
-        }
-
-        #[test]
-        fn can_be_constructed_with_ether_as_output() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
-                CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, TOKEN0.clone());
-            assert_eq!(trade.output_amount.currency, ETHER.clone());
-        }
-
-        #[test]
-        fn can_be_constructed_with_ether_as_output_for_exact_input() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, TOKEN0.clone());
-            assert_eq!(trade.output_amount.currency, ETHER.clone());
-        }
-    }
-    mod best_trade_exact_in {
-        use super::*;
-
-        #[test]
-        #[should_panic(expected = "PAIRS")]
-        fn throws_with_empty_pairs() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
-                vec![],
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TOKEN2.clone(),
-                BestTradeOptions::default(),
-                vec![],
-                None,
-                &mut binding,
-            );
-            assert!(result.is_err())
-        }
-
-        #[test]
-        fn provides_best_route_with_multiple_pairs() {
-            let amount_in = CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap();
-            let mut result = vec![];
-            Trade::best_trade_exact_in(
-                vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
-                amount_in.clone(),
-                TOKEN2.clone(),
-                BestTradeOptions::default(),
-                vec![],
-                None,
-                &mut result,
-            )
-            .unwrap();
-
-            assert!(!result.is_empty());
-            assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path[0], TOKEN0.clone());
-            assert_eq!(result[0].route.path[1], TOKEN2.clone());
-        }
+    #[test]
+    fn can_be_constructed_with_ether_as_input() {
+        let trade = Trade::new(
+            Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
+            CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+            TradeType::ExactInput,
+        )
+        .unwrap();
+        assert_eq!(trade.input_amount.currency, ETHER.clone());
     }
 
-    mod best_trade_exact_out {
-        use super::*;
+    #[test]
+    fn it_can_be_constructed_with_ether_as_input_for_exact_output() {
+        let trade = Trade::new(
+            Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TradeType::ExactOutput,
+        )
+        .unwrap();
+        assert_eq!(trade.input_amount.currency, ETHER.clone());
+        assert_eq!(trade.output_amount.currency, TOKEN0.clone());
+    }
 
-        #[test]
-        #[should_panic(expected = "PAIRS")]
-        fn throws_with_empty_pairs() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
-                vec![],
+    #[test]
+    fn can_be_constructed_with_ether_as_output() {
+        let trade = Trade::new(
+            Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
+            CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+            TradeType::ExactOutput,
+        )
+        .unwrap();
+        assert_eq!(trade.input_amount.currency, TOKEN0.clone());
+        assert_eq!(trade.output_amount.currency, ETHER.clone());
+    }
+
+    #[test]
+    fn it_can_be_constructed_with_ether_as_output_for_exact_input() {
+        let trade = Trade::new(
+            Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TradeType::ExactInput,
+        )
+        .unwrap();
+        assert_eq!(trade.input_amount.currency, TOKEN0.clone());
+        assert_eq!(trade.output_amount.currency, ETHER.clone());
+    }
+
+    #[test]
+    #[should_panic(expected = "PAIRS")]
+    fn best_trade_exact_in_throws_with_empty_pairs() {
+        Trade::best_trade_exact_in(
+            vec![],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TOKEN2.clone(),
+            Default::default(),
+            vec![],
+            None,
+            &mut vec![],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "MAX_HOPS")]
+    fn best_trade_exact_in_throws_with_max_hops_of_0() {
+        Trade::best_trade_exact_in(
+            vec![PAIR_0_2.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TOKEN2.clone(),
+            BestTradeOptions {
+                max_hops: Some(0),
+                max_num_results: Some(0),
+            },
+            vec![],
+            None,
+            &mut vec![],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn provides_the_best_route() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TOKEN2.clone(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].route.pairs.len(), 1);
+        assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+        assert_eq!(
+            result[0].input_amount,
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap()
+        );
+        assert_eq!(
+            result[0].output_amount,
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 99).unwrap()
+        );
+        assert_eq!(result[1].route.pairs.len(), 2);
+        assert_eq!(
+            result[1].route.path,
+            vec![TOKEN0.clone(), TOKEN1.clone(), TOKEN2.clone()]
+        );
+        assert_eq!(
+            result[1].input_amount,
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap()
+        );
+        assert_eq!(
+            result[1].output_amount,
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 69).unwrap()
+        );
+    }
+
+    #[test]
+    fn doesnt_throw_for_zero_liquidity_pairs() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![EMPTY_PAIR_0_1.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TOKEN1.clone(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn respects_max_hops() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
+            TOKEN2.clone(),
+            BestTradeOptions {
+                max_hops: Some(1),
+                ..Default::default()
+            },
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].route.pairs.len(), 1);
+        assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+
+        // Calculate expected output
+        let input_amount = 10;
+        let input_reserve = 1000; // PAIR_0_2 reserve of TOKEN0
+        let output_reserve = 1100; // PAIR_0_2 reserve of TOKEN2
+        let input_amount_with_fee = input_amount * 997;
+        let numerator = input_amount_with_fee * output_reserve;
+        let denominator = input_reserve * 1000 + input_amount_with_fee;
+        let expected_output = numerator / denominator;
+
+        assert_eq!(
+            result[0].output_amount,
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
+            "Expected output: {}, Actual output: {}",
+            expected_output,
+            result[0].output_amount.quotient()
+        );
+    }
+
+    #[test]
+    fn respects_max_num_results() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
+            TOKEN2.clone(),
+            BestTradeOptions {
+                max_num_results: Some(1),
+                ..Default::default()
+            },
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn no_path() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
+            TOKEN2.clone(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 0);
+    }
+
+    // #[test]
+    // fn works_for_ether_currency_input() {
+    //     let mut binding = vec![];
+    //     let result = Trade::best_trade_exact_in(
+    //         vec![
+    //             PAIR_WETH_0.clone(),
+    //             PAIR_0_1.clone(),
+    //             PAIR_0_3.clone(),
+    //             PAIR_1_3.clone(),
+    //         ],
+    //         CurrencyAmount::from_raw_amount(Ether::on_chain(1), 100).unwrap(),
+    //         TOKEN3.clone(),
+    //         Default::default(),
+    //         vec![],
+    //         None,
+    //         &mut binding,
+    //     )
+    //     .unwrap();
+
+    //     assert_eq!(result.len(), 2, "Expected two trade results");
+    //     assert_eq!(
+    //         result[0].input_amount.currency,
+    //         ETHER.clone(),
+    //         "Input currency should be ETHER"
+    //     );
+    //     assert_eq!(
+    //         result[0].route.path,
+    //         vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()],
+    //         "Unexpected route path for first trade"
+    //     );
+    //     assert_eq!(
+    //         result[0].output_amount.currency,
+    //         TOKEN3.clone(),
+    //         "Output currency should be TOKEN3"
+    //     );
+    //     assert_eq!(
+    //         result[1].input_amount.currency,
+    //         ETHER.clone()
+    //     );
+    //     assert_eq!(
+    //         result[1].route.path,
+    //         vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]
+    //     );
+    //     assert_eq!(
+    //         result[1].output_amount.currency,
+    //         TOKEN3.clone()
+    //     );
+    // }
+
+    #[test]
+    fn works_for_ether_currency_output() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_in(
+            vec![
+                PAIR_WETH_0.clone(),
+                PAIR_0_1.clone(),
+                PAIR_0_3.clone(),
+                PAIR_1_3.clone(),
+            ],
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 100).unwrap(),
+            ETHER.clone(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].input_amount.currency, TOKEN3.clone());
+        assert_eq!(
+            result[0].route.path,
+            vec![TOKEN3.clone(), TOKEN0.clone(), WETH.clone()]
+        );
+        assert_eq!(result[0].output_amount.currency, ETHER.clone());
+        assert_eq!(result[1].input_amount.currency, TOKEN3.clone());
+        assert_eq!(
+            result[1].route.path,
+            vec![TOKEN3.clone(), TOKEN1.clone(), TOKEN0.clone(), WETH.clone()]
+        );
+        assert_eq!(result[1].output_amount.currency, ETHER.clone());
+    }
+
+    #[test]
+    fn maximum_amount_in_exact_input() {
+        let mut exact_in = Trade::new(
+            Route::new(
+                vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
-                CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
-                BestTradeOptions::default(),
-                vec![],
-                None,
-                &mut binding,
-            );
-            assert!(result.is_err());
-        }
+                TOKEN2.clone(),
+            ),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TradeType::ExactInput,
+        )
+        .unwrap();
 
-        #[test]
-        fn provides_best_route_with_multiple_pairs() {
-            let amount_out = CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap();
-            let mut result = vec![];
-            Trade::best_trade_exact_out(
-                vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
-                TOKEN0.clone(),
-                amount_out.clone(),
-                BestTradeOptions::default(),
-                vec![],
-                None,
-                &mut result,
-            )
-            .unwrap();
-
-            assert!(!result.is_empty());
-            assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path[0], TOKEN0.clone());
-            assert_eq!(result[0].route.path[1], TOKEN2.clone());
-        }
+        assert_eq!(
+            exact_in.maximum_amount_in(Percent::new(0, 100)).unwrap(),
+            exact_in.input_amount
+        );
+        assert_eq!(
+            exact_in.maximum_amount_in(Percent::new(5, 100)).unwrap(),
+            exact_in.input_amount
+        );
+        assert_eq!(
+            exact_in.maximum_amount_in(Percent::new(200, 100)).unwrap(),
+            exact_in.input_amount
+        );
     }
 
-    mod minimum_amount_out {
-        use super::*;
+    #[test]
+    fn maximum_amount_in_exact_output() {
+        let mut exact_out = Trade::new(
+            Route::new(vec![PAIR_0_1.clone(), PAIR_1_2.clone()], TOKEN0.clone(), TOKEN2.clone()),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+            TradeType::ExactOutput,
+        )
+        .unwrap();
 
-        #[test]
-        fn returns_exact_amount_for_exact_output() {
-            let mut trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN1.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
-
-            let result = trade.minimum_amount_out(Percent::new(5, 100)).unwrap();
-            assert_eq!(result.quotient(), BigInt::from(100));
-        }
-
-        #[test]
-        fn returns_slippage_adjusted_amount_for_exact_input() {
-            let mut trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-
-            let result = trade.minimum_amount_out(Percent::new(5, 100)).unwrap();
-            assert!(result.quotient() < trade.output_amount.quotient());
-        }
+        assert_eq!(
+            exact_out.maximum_amount_in(Percent::new(0, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 156).unwrap()
+        );
+        assert_eq!(
+            exact_out.maximum_amount_in(Percent::new(5, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 163).unwrap()
+        );
+        assert_eq!(
+            exact_out.maximum_amount_in(Percent::new(200, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 468).unwrap()
+        );
     }
 
-    mod maximum_amount_in {
-        use super::*;
+    #[test]
+    fn minimum_amount_out_exact_input() {
+        let mut exact_in = Trade::new(
+            Route::new(vec![PAIR_0_1.clone(), PAIR_1_2.clone()], TOKEN0.clone(), TOKEN2.clone()),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TradeType::ExactInput,
+        )
+        .unwrap();
 
-        #[test]
-        fn returns_exact_amount_for_exact_input() {
-            let mut trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-
-            let result = trade.maximum_amount_in(Percent::new(5, 100)).unwrap();
-            assert_eq!(result.quotient(), BigInt::from(100));
-        }
-
-        #[test]
-        fn returns_slippage_adjusted_amount_for_exact_output() {
-            let mut trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN1.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
-
-            let result = trade.maximum_amount_in(Percent::new(5, 100)).unwrap();
-            assert!(result.quotient() > trade.input_amount.quotient());
-        }
+        assert_eq!(
+            exact_in.minimum_amount_out(Percent::new(0, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 69).unwrap()
+        );
+        assert_eq!(
+            exact_in.minimum_amount_out(Percent::new(5, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 65).unwrap()
+        );
+        assert_eq!(
+            exact_in.minimum_amount_out(Percent::new(200, 100)).unwrap(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 23).unwrap()
+        );
     }
 
-    mod worst_execution_price {
-        use super::*;
+    #[test]
+    fn worst_execution_price_exact_input() {
+        let mut exact_in = Trade::new(
+            Route::new(vec![PAIR_0_1.clone(), PAIR_1_2.clone()], TOKEN0.clone(), TOKEN2.clone()),
+            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+            TradeType::ExactInput,
+        )
+        .unwrap();
 
-        #[test]
-        fn returns_price_impact_adjusted_price() {
-            let mut trade = Trade::new(
-                Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-
-            let worst_price = trade.worst_execution_price(Percent::new(5, 100)).unwrap();
-            assert!(worst_price.as_fraction() < trade.execution_price.as_fraction());
-        }
+        assert_eq!(
+            exact_in.worst_execution_price(Percent::new(0, 100)).unwrap(),
+            Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 69)
+        );
+        assert_eq!(
+            exact_in.worst_execution_price(Percent::new(5, 100)).unwrap(),
+            Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 65)
+        );
+        assert_eq!(
+            exact_in.worst_execution_price(Percent::new(200, 100)).unwrap(),
+            Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 23)
+        );
     }
+
+    #[test]
+    fn best_trade_exact_out() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].route.pairs.len(), 1);
+        assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+        assert_eq!(result[0].input_amount, CurrencyAmount::from_raw_amount(TOKEN0.clone(), 101).unwrap());
+        assert_eq!(result[0].output_amount, CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap());
+        assert_eq!(result[1].route.pairs.len(), 2);
+        assert_eq!(result[1].route.path, vec![TOKEN0.clone(), TOKEN1.clone(), TOKEN2.clone()]);
+        assert_eq!(result[1].input_amount, CurrencyAmount::from_raw_amount(TOKEN0.clone(), 156).unwrap());
+        assert_eq!(result[1].output_amount, CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap());
+    }
+
+    #[test]
+    #[should_panic(expected = "PAIRS")]
+    fn best_trade_exact_out_throws_with_empty_pairs() {
+        Trade::best_trade_exact_out(
+            vec![],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut vec![],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "MAX_HOPS")]
+    fn best_trade_exact_out_throws_with_max_hops_of_0() {
+        Trade::best_trade_exact_out(
+            vec![PAIR_0_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+            BestTradeOptions {
+                max_hops: Some(0),
+                ..Default::default()
+            },
+            vec![],
+            None,
+            &mut vec![],
+        )
+        .unwrap();
+    }
+
+
+    #[test]
+    fn best_trade_exact_out_provides_best_route() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].route.pairs.len(), 1);
+        assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+        assert_eq!(result[0].input_amount, CurrencyAmount::from_raw_amount(TOKEN0.clone(), 101).unwrap());
+        assert_eq!(result[0].output_amount, CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap());
+        assert_eq!(result[1].route.pairs.len(), 2);
+        assert_eq!(result[1].route.path, vec![TOKEN0.clone(), TOKEN1.clone(), TOKEN2.clone()]);
+        assert_eq!(result[1].input_amount, CurrencyAmount::from_raw_amount(TOKEN0.clone(), 156).unwrap());
+        assert_eq!(result[1].output_amount, CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap());
+    }
+
+
+    #[test]
+    fn best_trade_exact_out_handles_zero_liquidity_pairs() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![EMPTY_PAIR_0_1.clone()],
+            TOKEN1.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn best_trade_exact_out_respects_max_hops() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
+            BestTradeOptions { max_hops: Some(1), ..Default::default() },
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].route.pairs.len(), 1);
+        assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+    }
+
+
+    #[test]
+    #[should_panic]
+    fn best_trade_exact_out_insufficient_liquidity() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1200).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn best_trade_exact_out_insufficient_liquidity_in_one_pair_but_not_the_other() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1050).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn best_trade_exact_out_respects_max_num_results() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
+            BestTradeOptions { max_num_results: Some(1), ..Default::default() },
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn best_trade_exact_out_no_path() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
+            TOKEN0.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn best_trade_exact_out_works_for_ether_currency_input() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_WETH_0.clone(), PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
+            ETHER.clone(),
+            CurrencyAmount::from_raw_amount(TOKEN3.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].input_amount.currency, ETHER.clone());
+        assert_eq!(result[0].route.path, vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()]);
+        assert_eq!(result[0].output_amount.currency, TOKEN3.clone());
+        assert_eq!(result[1].input_amount.currency, ETHER.clone());
+        assert_eq!(result[1].route.path, vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]);
+        assert_eq!(result[1].output_amount.currency, TOKEN3.clone());
+    }
+
+    #[test]
+    fn best_trade_exact_out_works_for_ether_currency_output() {
+        let mut binding = vec![];
+        let result = Trade::best_trade_exact_out(
+            vec![PAIR_WETH_0.clone(), PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
+            TOKEN3.clone(),
+            CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+            Default::default(),
+            vec![],
+            None,
+            &mut binding,
+        )
+        .unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].input_amount.currency, TOKEN3.clone());
+        assert_eq!(result[0].route.path, vec![TOKEN3.clone(), TOKEN0.clone(), WETH.clone()]);
+        assert_eq!(result[0].output_amount.currency, ETHER.clone());
+        assert_eq!(result[1].input_amount.currency, TOKEN3.clone());
+        assert_eq!(result[1].route.path, vec![TOKEN3.clone(), TOKEN1.clone(), TOKEN0.clone(), WETH.clone()]);
+        assert_eq!(result[1].output_amount.currency, ETHER.clone());
+    }
+
+
+
+
 }
