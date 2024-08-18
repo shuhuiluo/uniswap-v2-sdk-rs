@@ -1,6 +1,6 @@
 use alloy_primitives::{address, b256, Address, B256};
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use uniswap_sdk_core::{
     addresses::V2_FACTORY_ADDRESSES,
     prelude::{BigInt, Percent},
@@ -8,7 +8,7 @@ use uniswap_sdk_core::{
 
 pub const FACTORY_ADDRESS: Address = address!("5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f");
 
-pub static FACTORY_ADDRESS_MAP: Lazy<HashMap<u64, Address>> =
+pub static FACTORY_ADDRESS_MAP: Lazy<FxHashMap<u64, Address>> =
     Lazy::new(|| V2_FACTORY_ADDRESSES.clone());
 
 pub const INIT_CODE_HASH: B256 =

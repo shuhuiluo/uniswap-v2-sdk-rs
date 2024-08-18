@@ -1,12 +1,13 @@
 use crate::prelude::{Pair, Route};
 use anyhow::Result;
-use uniswap_sdk_core::prelude::sorted_insert::sorted_insert;
-use uniswap_sdk_core::prelude::{compute_price_impact::compute_price_impact, *};
+use uniswap_sdk_core::prelude::{
+    compute_price_impact::compute_price_impact, sorted_insert::sorted_insert, *,
+};
 
 /// Comparator function to allow sorting of trades by their output amounts, in decreasing order, and
 /// then input amounts in increasing order. i.e. the best trades have the most outputs for the least
 /// inputs and are sorted first.
-pub fn input_output_comparator<TInput: CurrencyTrait, TOutput: CurrencyTrait>(
+pub fn input_output_comparator<TInput: Currency, TOutput: Currency>(
     a: &Trade<TInput, TOutput>,
     b: &Trade<TInput, TOutput>,
 ) -> Ordering {
@@ -37,7 +38,7 @@ pub fn input_output_comparator<TInput: CurrencyTrait, TOutput: CurrencyTrait>(
 
 /// Extension of the input output comparator that also considers other dimensions of the trade in
 /// ranking them.
-pub fn trade_comparator<TInput: CurrencyTrait, TOutput: CurrencyTrait>(
+pub fn trade_comparator<TInput: Currency, TOutput: Currency>(
     a: &Trade<TInput, TOutput>,
     b: &Trade<TInput, TOutput>,
 ) -> Ordering {
@@ -69,7 +70,7 @@ pub struct BestTradeOptions {
 ///
 /// Does not account for slippage, i.e. trades that front run this trade and move the price.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Trade<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
+pub struct Trade<TInput: Currency, TOutput: Currency> {
     /// The route of the trade, i.e. which pairs the trade goes through and the input/output
     /// currencies.
     pub route: Route<TInput, TOutput>,
@@ -86,10 +87,10 @@ pub struct Trade<TInput: CurrencyTrait, TOutput: CurrencyTrait> {
     pub price_impact: Percent,
 }
 
-impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
+impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     pub fn new(
         route: Route<TInput, TOutput>,
-        amount: CurrencyAmount<impl CurrencyTrait>,
+        amount: CurrencyAmount<impl Currency>,
         trade_type: TradeType,
     ) -> Result<Self> {
         let len = route.path.len();
@@ -431,6 +432,7 @@ impl<TInput: CurrencyTrait, TOutput: CurrencyTrait> Trade<TInput, TOutput> {
     }
 }
 
+#[allow(dead_code)]
 #[cfg(test)]
 mod tests {
     use super::*;

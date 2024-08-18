@@ -767,7 +767,7 @@ mod tests {
                         .get_output_amount(&input_blasters_amount, true)
                         .unwrap();
 
-                    assert_eq!(output_blast_amount.to_exact(), "0.00000000000000009");
+                    assert_eq!(output_blast_amount.to_exact(), "9E-17");
                 }
 
                 #[test]
@@ -784,7 +784,7 @@ mod tests {
                     let (input_blaster_amount, _) =
                         pair.get_input_amount(&output_blast_amount, true).unwrap();
 
-                    assert_eq!(input_blaster_amount.to_exact(), "0.000000101");
+                    assert_eq!(input_blaster_amount.to_exact(), "1.01E-7");
                 }
             }
 
@@ -806,7 +806,7 @@ mod tests {
                         .get_output_amount(&input_blasters_amount, false)
                         .unwrap();
 
-                    assert_eq!(output_blast_amount.to_exact(), "0.000000000000000098");
+                    assert_eq!(output_blast_amount.to_exact(), "9.8E-17");
                 }
 
                 #[test]
@@ -823,7 +823,7 @@ mod tests {
                     let (input_blaster_amount, _) =
                         pair.get_input_amount(&output_blast_amount, false).unwrap();
 
-                    assert_eq!(input_blaster_amount.to_exact(), "0.000000093");
+                    assert_eq!(input_blaster_amount.to_exact(), "9.3E-8");
                 }
             }
         }
