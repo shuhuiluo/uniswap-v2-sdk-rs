@@ -293,7 +293,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                         currency_amount_in.currency.clone(),
                         currency_out.clone(),
                     ),
-                    currency_amount_in.wrapped()?,
+                    currency_amount_in.clone(),
                     TradeType::ExactInput,
                 )?;
                 sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
@@ -400,7 +400,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                         currency_in.clone(),
                         currency_amount_out.currency.clone(),
                     ),
-                    currency_amount_out.wrapped()?,
+                    currency_amount_out.clone(),
                     TradeType::ExactOutput,
                 )?;
                 sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
