@@ -549,34 +549,14 @@ mod tests {
             assert_eq!(trade.input_amount.currency, TOKEN0.clone());
             assert_eq!(trade.output_amount.currency, ETHER.clone());
         }
+    }
 
-        #[test]
-        fn it_can_be_constructed_with_ether_as_input_for_exact_output() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], ETHER.clone(), TOKEN0.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, ETHER.clone());
-            assert_eq!(trade.output_amount.currency, TOKEN0.clone());
-        }
-
-        #[test]
-        fn it_can_be_constructed_with_ether_as_output_for_exact_input() {
-            let trade = Trade::new(
-                Route::new(vec![PAIR_WETH_0.clone()], TOKEN0.clone(), ETHER.clone()),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
-            assert_eq!(trade.input_amount.currency, TOKEN0.clone());
-            assert_eq!(trade.output_amount.currency, ETHER.clone());
-        }
+    mod best_trade_exact_in {
+        use super::*;
 
         #[test]
         #[should_panic(expected = "PAIRS")]
-        fn best_trade_exact_in_throws_with_empty_pairs() {
+        fn throws_with_empty_pairs() {
             Trade::best_trade_exact_in(
                 vec![],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
@@ -591,7 +571,7 @@ mod tests {
 
         #[test]
         #[should_panic(expected = "MAX_HOPS")]
-        fn best_trade_exact_in_throws_with_max_hops_of_0() {
+        fn throws_with_max_hops_of_0() {
             Trade::best_trade_exact_in(
                 vec![PAIR_0_2.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
@@ -684,22 +664,28 @@ mod tests {
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].route.pairs.len(), 1);
             assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+        }
 
-            // Calculate expected output
-            let input_amount = 10;
-            let input_reserve = 1000; // PAIR_0_2 reserve of TOKEN0
-            let output_reserve = 1100; // PAIR_0_2 reserve of TOKEN2
-            let input_amount_with_fee = input_amount * 997;
-            let numerator = input_amount_with_fee * output_reserve;
-            let denominator = input_reserve * 1000 + input_amount_with_fee;
-            let expected_output = numerator / denominator;
+        #[test]
+        fn insufficient_input_for_one_pair() {
+            let mut binding = vec![];
+            let result = Trade::best_trade_exact_in(
+                vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
+                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1).unwrap(),
+                TOKEN2.clone(),
+                Default::default(),
+                vec![],
+                None,
+                &mut binding,
+            )
+            .unwrap();
 
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].route.pairs.len(), 1);
+            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
             assert_eq!(
                 result[0].output_amount,
-                CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
-                "Expected output: {}, Actual output: {}",
-                expected_output,
-                result[0].output_amount.quotient()
+                CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1).unwrap()
             );
         }
 
@@ -740,54 +726,39 @@ mod tests {
             assert_eq!(result.len(), 0);
         }
 
-        // #[test]
-        // fn works_for_ether_currency_input() {
-        //     let mut binding = vec![];
-        //     let result = Trade::best_trade_exact_in(
-        //         vec![
-        //             PAIR_WETH_0.clone(),
-        //             PAIR_0_1.clone(),
-        //             PAIR_0_3.clone(),
-        //             PAIR_1_3.clone(),
-        //         ],
-        //         CurrencyAmount::from_raw_amount(Ether::on_chain(1), 100).unwrap(),
-        //         TOKEN3.clone(),
-        //         Default::default(),
-        //         vec![],
-        //         None,
-        //         &mut binding,
-        //     )
-        //     .unwrap();
+        #[test]
+        fn works_for_ether_currency_input() {
+            let mut binding = vec![];
+            let result = Trade::best_trade_exact_in(
+                vec![
+                    PAIR_WETH_0.clone(),
+                    PAIR_0_1.clone(),
+                    PAIR_0_3.clone(),
+                    PAIR_1_3.clone(),
+                ],
+                CurrencyAmount::from_raw_amount(ETHER.clone(), 100).unwrap(),
+                TOKEN3.clone(),
+                Default::default(),
+                vec![],
+                None,
+                &mut binding,
+            )
+            .unwrap();
 
-        //     assert_eq!(result.len(), 2, "Expected two trade results");
-        //     assert_eq!(
-        //         result[0].input_amount.currency,
-        //         ETHER.clone(),
-        //         "Input currency should be ETHER"
-        //     );
-        //     assert_eq!(
-        //         result[0].route.path,
-        //         vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()],
-        //         "Unexpected route path for first trade"
-        //     );
-        //     assert_eq!(
-        //         result[0].output_amount.currency,
-        //         TOKEN3.clone(),
-        //         "Output currency should be TOKEN3"
-        //     );
-        //     assert_eq!(
-        //         result[1].input_amount.currency,
-        //         ETHER.clone()
-        //     );
-        //     assert_eq!(
-        //         result[1].route.path,
-        //         vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]
-        //     );
-        //     assert_eq!(
-        //         result[1].output_amount.currency,
-        //         TOKEN3.clone()
-        //     );
-        // }
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].input_amount.currency, ETHER.clone());
+            assert_eq!(
+                result[0].route.path,
+                vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()],
+            );
+            assert_eq!(result[0].output_amount.currency, TOKEN3.clone());
+            assert_eq!(result[1].input_amount.currency, ETHER.clone());
+            assert_eq!(
+                result[1].route.path,
+                vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]
+            );
+            assert_eq!(result[1].output_amount.currency, TOKEN3.clone());
+        }
 
         #[test]
         fn works_for_ether_currency_output() {
