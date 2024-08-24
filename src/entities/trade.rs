@@ -187,7 +187,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
     ///   this trade
     pub fn minimum_amount_out(
-        &mut self,
+        &self,
         slippage_tolerance: Percent,
     ) -> Result<CurrencyAmount<TOutput>> {
         assert!(
@@ -213,10 +213,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
     ///   this trade
-    pub fn maximum_amount_in(
-        &mut self,
-        slippage_tolerance: Percent,
-    ) -> Result<CurrencyAmount<TInput>> {
+    pub fn maximum_amount_in(&self, slippage_tolerance: Percent) -> Result<CurrencyAmount<TInput>> {
         assert!(
             slippage_tolerance >= Percent::new(0, 1),
             "SLIPPAGE_TOLERANCE"
@@ -330,7 +327,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `slippage_tolerance`: The allowed tolerated slippage
     pub fn worst_execution_price(
-        &mut self,
+        &self,
         slippage_tolerance: Percent,
     ) -> Result<Price<TInput, TOutput>> {
         Ok(Price::new(
@@ -793,64 +790,100 @@ mod tests {
             );
             assert_eq!(result[1].output_amount.currency, ETHER.clone());
         }
+    }
 
-        #[test]
-        fn maximum_amount_in_exact_input() {
-            let mut exact_in = Trade::new(
-                Route::new(
-                    vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
-                    TOKEN0.clone(),
-                    TOKEN2.clone(),
-                ),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
-                TradeType::ExactInput,
-            )
-            .unwrap();
+    mod maximum_amount_in {
+        use super::*;
 
-            assert_eq!(
-                exact_in.maximum_amount_in(Percent::new(0, 100)).unwrap(),
-                exact_in.input_amount
-            );
-            assert_eq!(
-                exact_in.maximum_amount_in(Percent::new(5, 100)).unwrap(),
-                exact_in.input_amount
-            );
-            assert_eq!(
-                exact_in.maximum_amount_in(Percent::new(200, 100)).unwrap(),
-                exact_in.input_amount
-            );
+        mod exact_input {
+            use super::*;
+
+            static EXACT_IN: Lazy<Trade<Token, Token>> = Lazy::new(|| {
+                Trade::new(
+                    Route::new(
+                        vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
+                        TOKEN0.clone(),
+                        TOKEN2.clone(),
+                    ),
+                    CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
+                    TradeType::ExactInput,
+                )
+                .unwrap()
+            });
+
+            #[test]
+            #[should_panic(expected = "SLIPPAGE_TOLERANCE")]
+            fn throws_if_less_than_0() {
+                EXACT_IN.maximum_amount_in(Percent::new(-1, 100)).unwrap();
+            }
+
+            #[test]
+            fn returns_exact_if_0() {
+                assert_eq!(
+                    EXACT_IN.maximum_amount_in(Percent::new(0, 100)).unwrap(),
+                    EXACT_IN.input_amount
+                );
+            }
+
+            #[test]
+            fn returns_exact_if_non_zero() {
+                assert_eq!(
+                    EXACT_IN.maximum_amount_in(Percent::new(5, 100)).unwrap(),
+                    EXACT_IN.input_amount
+                );
+                assert_eq!(
+                    EXACT_IN.maximum_amount_in(Percent::new(200, 100)).unwrap(),
+                    EXACT_IN.input_amount
+                );
+            }
         }
 
-        #[test]
-        fn maximum_amount_in_exact_output() {
-            let mut exact_out = Trade::new(
-                Route::new(
-                    vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
-                    TOKEN0.clone(),
-                    TOKEN2.clone(),
-                ),
-                CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
-                TradeType::ExactOutput,
-            )
-            .unwrap();
+        mod exact_output {
+            use super::*;
 
-            assert_eq!(
-                exact_out.maximum_amount_in(Percent::new(0, 100)).unwrap(),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 156).unwrap()
-            );
-            assert_eq!(
-                exact_out.maximum_amount_in(Percent::new(5, 100)).unwrap(),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 163).unwrap()
-            );
-            assert_eq!(
-                exact_out.maximum_amount_in(Percent::new(200, 100)).unwrap(),
-                CurrencyAmount::from_raw_amount(TOKEN0.clone(), 468).unwrap()
-            );
+            static EXACT_OUT: Lazy<Trade<Token, Token>> = Lazy::new(|| {
+                Trade::new(
+                    Route::new(
+                        vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
+                        TOKEN0.clone(),
+                        TOKEN2.clone(),
+                    ),
+                    CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
+                    TradeType::ExactOutput,
+                )
+                .unwrap()
+            });
+
+            #[test]
+            #[should_panic(expected = "SLIPPAGE_TOLERANCE")]
+            fn throws_if_less_than_0() {
+                EXACT_OUT.maximum_amount_in(Percent::new(-1, 100)).unwrap();
+            }
+
+            #[test]
+            fn returns_exact_if_0() {
+                assert_eq!(
+                    EXACT_OUT.maximum_amount_in(Percent::new(0, 100)).unwrap(),
+                    EXACT_OUT.input_amount
+                );
+            }
+
+            #[test]
+            fn returns_slippage_amount_if_non_zero() {
+                assert_eq!(
+                    EXACT_OUT.maximum_amount_in(Percent::new(5, 100)).unwrap(),
+                    CurrencyAmount::from_raw_amount(TOKEN0.clone(), 163).unwrap()
+                );
+                assert_eq!(
+                    EXACT_OUT.maximum_amount_in(Percent::new(200, 100)).unwrap(),
+                    CurrencyAmount::from_raw_amount(TOKEN0.clone(), 468).unwrap()
+                );
+            }
         }
 
         #[test]
         fn minimum_amount_out_exact_input() {
-            let mut exact_in = Trade::new(
+            let exact_in = Trade::new(
                 Route::new(
                     vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
                     TOKEN0.clone(),
@@ -877,7 +910,7 @@ mod tests {
 
         #[test]
         fn worst_execution_price_exact_input() {
-            let mut exact_in = Trade::new(
+            let exact_in = Trade::new(
                 Route::new(
                     vec![PAIR_0_1.clone(), PAIR_1_2.clone()],
                     TOKEN0.clone(),
