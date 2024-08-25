@@ -977,4 +977,96 @@ mod tests {
             }
         }
     }
+
+    mod worst_execution_price {
+        use super::*;
+
+        mod exact_input {
+            use super::*;
+
+            #[test]
+            #[should_panic(expected = "SLIPPAGE_TOLERANCE")]
+            fn throws_if_less_than_0() {
+                EXACT_IN_TRADE
+                    .worst_execution_price(Percent::new(-1, 100))
+                    .unwrap();
+            }
+
+            #[test]
+            fn returns_exact_if_0() {
+                assert_eq!(
+                    EXACT_IN_TRADE
+                        .worst_execution_price(Percent::new(0, 100))
+                        .unwrap(),
+                    EXACT_IN_TRADE.execution_price
+                );
+            }
+
+            #[test]
+            fn returns_exact_if_non_zero() {
+                assert_eq!(
+                    EXACT_IN_TRADE
+                        .worst_execution_price(Percent::new(0, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 69)
+                );
+                assert_eq!(
+                    EXACT_IN_TRADE
+                        .worst_execution_price(Percent::new(5, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 65)
+                );
+                assert_eq!(
+                    EXACT_IN_TRADE
+                        .worst_execution_price(Percent::new(200, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 100, 23)
+                );
+            }
+        }
+
+        mod exact_output {
+            use super::*;
+
+            #[test]
+            #[should_panic(expected = "SLIPPAGE_TOLERANCE")]
+            fn throws_if_less_than_0() {
+                EXACT_OUT_TRADE
+                    .worst_execution_price(Percent::new(-1, 100))
+                    .unwrap();
+            }
+
+            #[test]
+            fn returns_exact_if_0() {
+                assert_eq!(
+                    EXACT_OUT_TRADE
+                        .worst_execution_price(Percent::new(0, 100))
+                        .unwrap(),
+                    EXACT_OUT_TRADE.execution_price
+                );
+            }
+
+            #[test]
+            fn returns_slippage_amount_if_non_zero() {
+                assert_eq!(
+                    EXACT_OUT_TRADE
+                        .worst_execution_price(Percent::new(0, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 156, 100)
+                );
+                assert_eq!(
+                    EXACT_OUT_TRADE
+                        .worst_execution_price(Percent::new(5, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 163, 100)
+                );
+                assert_eq!(
+                    EXACT_OUT_TRADE
+                        .worst_execution_price(Percent::new(200, 100))
+                        .unwrap(),
+                    Price::new(TOKEN0.clone(), TOKEN2.clone(), 468, 100)
+                );
+            }
+        }
+    }
 }
