@@ -554,9 +554,6 @@ mod tests {
             assert_eq!(trade.input_amount.currency, TOKEN0.clone());
             assert_eq!(trade.output_amount.currency, ETHER.clone());
         }
-
-       
-
     }
 
     mod best_trade_exact_in {
