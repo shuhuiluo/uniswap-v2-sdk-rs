@@ -1,4 +1,4 @@
-use crate::prelude::{Pair, Route};
+use crate::prelude::{Error, Pair, Route};
 use anyhow::Result;
 use uniswap_sdk_core::prelude::{
     compute_price_impact::compute_price_impact, sorted_insert::sorted_insert, *,
@@ -279,7 +279,11 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
                 continue;
             }
-            let (amount_out, _) = pair.get_output_amount(&amount_in, false)?;
+            let amount_out = match pair.get_output_amount(&amount_in, false) {
+                Ok((amount_out, _)) => amount_out,
+                Err(Error::InsufficientInputAmount) => continue,
+                Err(e) => return Err(e.into()),
+            };
             // we have arrived at the output token, so this is the final trade of one of the paths
             if amount_out.currency.equals(&token_out) {
                 let mut next_pairs = current_pairs.clone();
@@ -386,7 +390,11 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
                 continue;
             }
-            let (amount_in, _) = pair.get_input_amount(&amount_out, false)?;
+            let amount_in = match pair.get_input_amount(&amount_out, false) {
+                Ok((amount_in, _)) => amount_in,
+                Err(Error::InsufficientReserves) => continue,
+                Err(e) => return Err(e.into()),
+            };
             // we have arrived at the input token, so this is the first trade of one of the paths
             if amount_in.currency.equals(&token_in) {
                 let mut next_pairs = vec![pair.clone()];
