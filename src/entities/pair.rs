@@ -1,4 +1,4 @@
-use crate::{constants::*, error::Error};
+use crate::prelude::{Error, *};
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
 use uniswap_sdk_core::{prelude::*, token};
@@ -24,6 +24,7 @@ use uniswap_sdk_core::{prelude::*, token};
 /// );
 /// assert_eq!(result, address!("b50b5182D6a47EC53a469395AF44e371d7C76ed4"));
 /// ```
+#[inline]
 pub fn compute_pair_address(factory: Address, token_a: Address, token_b: Address) -> Address {
     let (token_0, token_1) = if token_a < token_b {
         (token_a, token_b)
@@ -43,6 +44,7 @@ pub struct Pair {
 }
 
 impl Pair {
+    #[inline]
     pub fn get_address(token_a: &Token, token_b: &Token) -> Address {
         let factory_address = FACTORY_ADDRESS_MAP
             .get(&token_a.chain_id)
@@ -50,6 +52,7 @@ impl Pair {
         compute_pair_address(*factory_address, token_a.address(), token_b.address())
     }
 
+    #[inline]
     pub fn new(
         currency_amount_a: CurrencyAmount<Token>,
         token_amount_b: CurrencyAmount<Token>,
@@ -75,6 +78,7 @@ impl Pair {
         })
     }
 
+    #[inline]
     pub fn address(&self) -> Address {
         self.liquidity_token.address()
     }
@@ -84,13 +88,14 @@ impl Pair {
     /// ## Arguments
     ///
     /// * `token`: token to check
+    #[inline]
     pub fn involves_token(&self, token: &Token) -> bool {
-        token.equals(&self.token_amounts[0].currency)
-            || token.equals(&self.token_amounts[1].currency)
+        self.token0().equals(token) || self.token1().equals(token)
     }
 
     /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to
     /// reserve0
+    #[inline]
     pub fn token0_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[1].as_fraction() / self.token_amounts[0].as_fraction();
         Price::new(
@@ -103,6 +108,7 @@ impl Pair {
 
     /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to
     /// reserve1
+    #[inline]
     pub fn token1_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[0].as_fraction() / self.token_amounts[1].as_fraction();
         Price::new(
@@ -118,45 +124,48 @@ impl Pair {
     /// ## Arguments
     ///
     /// * `token`: token to return price of
+    #[inline]
     pub fn price_of(&self, token: &Token) -> Result<Price<Token, Token>, Error> {
-        if self.involves_token(token) {
-            Ok(if token.equals(self.token0()) {
-                self.token0_price()
-            } else {
-                self.token1_price()
-            })
+        if self.token0().equals(token) {
+            Ok(self.token0_price())
+        } else if self.token1().equals(token) {
+            Ok(self.token1_price())
         } else {
             Err(Error::InvalidToken)
         }
     }
 
+    #[inline]
     pub fn chain_id(&self) -> u64 {
         self.token0().chain_id
     }
 
+    #[inline]
     pub fn token0(&self) -> &Token {
-        &self.token_amounts[0].currency
+        &self.reserve0().currency
     }
 
+    #[inline]
     pub fn token1(&self) -> &Token {
-        &self.token_amounts[1].currency
+        &self.reserve1().currency
     }
 
+    #[inline]
     pub const fn reserve0(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[0]
     }
 
+    #[inline]
     pub const fn reserve1(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[1]
     }
 
+    #[inline]
     pub fn reserve_of(&self, token: &Token) -> Result<&CurrencyAmount<Token>, Error> {
-        if self.involves_token(token) {
-            Ok(if token.equals(self.token0()) {
-                self.reserve0()
-            } else {
-                self.reserve1()
-            })
+        if self.token0().equals(token) {
+            Ok(self.reserve0())
+        } else if self.token1().equals(token) {
+            Ok(self.reserve1())
         } else {
             Err(Error::InvalidToken)
         }
@@ -199,14 +208,8 @@ impl Pair {
         let numerator = &input_amount_with_fee_and_after_tax * output_reserve.quotient();
         let denominator =
             input_reserve.quotient() * _1000.clone() + &input_amount_with_fee_and_after_tax;
-        let output_amount = CurrencyAmount::from_raw_amount(
-            if input_amount.currency.equals(self.token0()) {
-                self.token1().clone()
-            } else {
-                self.token0().clone()
-            },
-            numerator / denominator,
-        )?;
+        let output_amount =
+            CurrencyAmount::from_raw_amount(output_token.clone(), numerator / denominator)?;
 
         if output_amount.quotient().is_zero() {
             return Err(Error::InsufficientInputAmount);
@@ -219,7 +222,7 @@ impl Pair {
         };
         let output_amount_after_tax = if percent_after_buy_fees > ZERO_PERCENT.clone() {
             CurrencyAmount::from_raw_amount(
-                output_amount.currency.clone(),
+                output_token.clone(),
                 (percent_after_buy_fees.as_fraction() * output_amount.as_fraction()).quotient(),
             )?
         } else {
@@ -258,17 +261,16 @@ impl Pair {
         } else {
             output_amount.clone()
         };
+        let output_reserve = self.reserve_of(&output_amount.currency)?;
 
         if self.reserve0().quotient().is_zero()
             || self.reserve1().quotient().is_zero()
-            || output_amount.quotient() >= self.reserve_of(&output_amount.currency)?.quotient()
-            || output_amount_before_tax.quotient()
-                >= self.reserve_of(&output_amount.currency)?.quotient()
+            || output_amount >= output_reserve
+            || &output_amount_before_tax >= output_reserve
         {
             return Err(Error::InsufficientReserves);
         }
 
-        let output_reserve = self.reserve_of(&output_amount.currency)?;
         let input_token = if output_amount.currency.equals(self.token0()) {
             self.token1()
         } else {
@@ -281,11 +283,7 @@ impl Pair {
         let denominator =
             (output_reserve.quotient() - output_amount_before_tax.quotient()) * _997.clone();
         let input_amount = CurrencyAmount::from_raw_amount(
-            if output_amount.currency.equals(self.token0()) {
-                self.token1().clone()
-            } else {
-                self.token0().clone()
-            },
+            input_token.clone(),
             numerator / denominator + BigInt::from(1),
         )?;
 
@@ -347,7 +345,8 @@ impl Pair {
         if liquidity.is_zero() {
             return Err(Error::InsufficientInputAmount);
         }
-        CurrencyAmount::from_raw_amount(self.liquidity_token.clone(), liquidity).map_err(Into::into)
+        CurrencyAmount::from_raw_amount(self.liquidity_token.clone(), liquidity)
+            .map_err(Error::Core)
     }
 
     pub fn get_liquidity_value(
@@ -397,31 +396,33 @@ impl Pair {
 
         let result = liquidity.quotient() * self.reserve_of(token)?.quotient()
             / total_supply_adjusted.quotient();
-        CurrencyAmount::from_raw_amount(token.clone(), result).map_err(Into::into)
+        CurrencyAmount::from_raw_amount(token.clone(), result).map_err(Error::Core)
     }
 
+    #[inline]
     fn derive_percent_after_sell_fees(&self, input_amount: &CurrencyAmount<Token>) -> Percent {
         let sell_fee_bips = if self.token0().equals(input_amount.currency.wrapped()) {
             self.token0().sell_fee_bps.clone()
         } else {
             self.token1().sell_fee_bps.clone()
         }
-        .unwrap_or(BigUint::zero());
-        if sell_fee_bips > BigUint::zero() {
+        .unwrap_or(BigUint::ZERO);
+        if sell_fee_bips > BigUint::ZERO {
             ONE_HUNDRED_PERCENT.clone() - Percent::new(sell_fee_bips, BASIS_POINTS.clone())
         } else {
             ZERO_PERCENT.clone()
         }
     }
 
+    #[inline]
     fn derive_percent_after_buy_fees(&self, output_amount: &CurrencyAmount<Token>) -> Percent {
         let buy_fee_bips = if self.token0().equals(output_amount.currency.wrapped()) {
             self.token0().buy_fee_bps.clone()
         } else {
             self.token1().buy_fee_bps.clone()
         }
-        .unwrap_or(BigUint::zero());
-        if buy_fee_bips > BigUint::zero() {
+        .unwrap_or(BigUint::ZERO);
+        if buy_fee_bips > BigUint::ZERO {
             ONE_HUNDRED_PERCENT.clone() - Percent::new(buy_fee_bips, BASIS_POINTS.clone())
         } else {
             ZERO_PERCENT.clone()
