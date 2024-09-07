@@ -17,7 +17,7 @@ pub const INIT_CODE_HASH: B256 =
 pub static MINIMUM_LIQUIDITY: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
 
 // exports for internal consumption
-pub(crate) static _ZERO: Lazy<BigInt> = Lazy::new(|| BigInt::from(0));
+pub(crate) const _ZERO: BigInt = BigInt::ZERO;
 pub(crate) static _ONE: Lazy<BigInt> = Lazy::new(|| BigInt::from(1));
 pub(crate) static FIVE: Lazy<BigInt> = Lazy::new(|| BigInt::from(5));
 pub(crate) static _997: Lazy<BigInt> = Lazy::new(|| BigInt::from(997));

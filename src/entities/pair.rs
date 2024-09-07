@@ -1,4 +1,4 @@
-use crate::{constants::*, errors::Error};
+use crate::{constants::*, error::Error};
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
 use uniswap_sdk_core::{prelude::*, token};
@@ -96,8 +96,8 @@ impl Pair {
         Price::new(
             self.token0().clone(),
             self.token1().clone(),
-            result.denominator(),
-            result.numerator(),
+            result.denominator,
+            result.numerator,
         )
     }
 
@@ -108,8 +108,8 @@ impl Pair {
         Price::new(
             self.token1().clone(),
             self.token0().clone(),
-            result.denominator(),
-            result.numerator(),
+            result.denominator,
+            result.numerator,
         )
     }
 
@@ -401,7 +401,7 @@ impl Pair {
     }
 
     fn derive_percent_after_sell_fees(&self, input_amount: &CurrencyAmount<Token>) -> Percent {
-        let sell_fee_bips = if self.token0().equals(&input_amount.currency.wrapped()) {
+        let sell_fee_bips = if self.token0().equals(input_amount.currency.wrapped()) {
             self.token0().sell_fee_bps.clone()
         } else {
             self.token1().sell_fee_bps.clone()
@@ -415,7 +415,7 @@ impl Pair {
     }
 
     fn derive_percent_after_buy_fees(&self, output_amount: &CurrencyAmount<Token>) -> Percent {
-        let buy_fee_bips = if self.token0().equals(&output_amount.currency.wrapped()) {
+        let buy_fee_bips = if self.token0().equals(output_amount.currency.wrapped()) {
             self.token0().buy_fee_bps.clone()
         } else {
             self.token1().buy_fee_bps.clone()
@@ -516,7 +516,7 @@ mod tests {
         fn constructor() {
             let result = Pair::new(
                 USDC_AMOUNT.clone(),
-                CurrencyAmount::from_raw_amount(Ether::on_chain(3).wrapped(), 100).unwrap(),
+                CurrencyAmount::from_raw_amount(Ether::on_chain(3).wrapped().clone(), 100).unwrap(),
             );
             assert!(result.is_err());
         }
@@ -841,9 +841,8 @@ mod tests {
                         &CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
                         &CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
                     )
-                    .unwrap_err()
-                    .to_string(),
-                    "Insufficient input amount"
+                    .unwrap_err(),
+                    Error::InsufficientInputAmount
                 );
 
                 assert_eq!(
@@ -852,9 +851,8 @@ mod tests {
                         &CurrencyAmount::from_raw_amount(token_a.clone(), 1000000).unwrap(),
                         &CurrencyAmount::from_raw_amount(token_b.clone(), 1).unwrap(),
                     )
-                    .unwrap_err()
-                    .to_string(),
-                    "Insufficient input amount"
+                    .unwrap_err(),
+                    Error::InsufficientInputAmount
                 );
 
                 assert_eq!(

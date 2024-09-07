@@ -1,6 +1,5 @@
-use crate::prelude::Pair;
+use crate::prelude::{Error, Pair};
 use alloy_primitives::ChainId;
-use anyhow::Result;
 use uniswap_sdk_core::prelude::*;
 
 /// Represents a list of pairs through which a swap can occur
@@ -31,7 +30,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
             "CHAIN_IDS"
         );
 
-        let wrapped_input = input.wrapped();
+        let wrapped_input = input.wrapped().clone();
         assert!(pairs[0].involves_token(&wrapped_input), "INPUT");
         assert!(
             pairs.last().unwrap().involves_token(&output.wrapped()),
@@ -53,7 +52,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
             };
             path.push(output.clone());
         }
-        assert!(path.last().unwrap().equals(&output.wrapped()), "PATH");
+        assert!(path.last().unwrap().equals(output.wrapped()), "PATH");
 
         Route {
             pairs,
@@ -69,13 +68,13 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
     }
 
     /// Returns the mid price of the route
-    pub fn mid_price(&mut self) -> Result<Price<TInput, TOutput>> {
+    pub fn mid_price(&mut self) -> Result<Price<TInput, TOutput>, Error> {
         if let Some(mid_price) = &self._mid_price {
             return Ok(mid_price.clone());
         }
         let mut price: Price<Token, Token>;
         let mut next_input: &Token;
-        if self.pairs[0].token0().equals(&self.input.wrapped()) {
+        if self.pairs[0].token0().equals(self.input.wrapped()) {
             price = self.pairs[0].token0_price();
             next_input = self.pairs[0].token1();
         } else {
@@ -94,8 +93,8 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
         self._mid_price = Some(Price::new(
             self.input.clone(),
             self.output.clone(),
-            price.denominator(),
-            price.numerator(),
+            price.denominator,
+            price.numerator,
         ));
         Ok(self._mid_price.clone().unwrap())
     }
@@ -112,7 +111,7 @@ mod tests {
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
     static TOKEN1: Lazy<Token> =
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
-    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
+    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped().clone());
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),

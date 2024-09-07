@@ -1,4 +1,4 @@
-use crate::prelude::{Error, Pair, Route};
+use crate::prelude::{Error, *};
 use anyhow::Result;
 use uniswap_sdk_core::prelude::{
     compute_price_impact::compute_price_impact, sorted_insert::sorted_insert, *,
@@ -58,7 +58,7 @@ pub fn trade_comparator<TInput: Currency, TOutput: Currency>(
     }
 }
 
-#[derive(Clone, PartialEq, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct BestTradeOptions {
     /// how many results to return
     pub max_num_results: Option<usize>,
@@ -92,7 +92,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         route: Route<TInput, TOutput>,
         amount: CurrencyAmount<impl Currency>,
         trade_type: TradeType,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         let len = route.path.len();
         let mut token_amount: CurrencyAmount<Token> = amount.wrapped()?;
         let input_amount: CurrencyAmount<TInput>;
@@ -106,13 +106,13 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
-                amount.numerator(),
-                amount.denominator(),
+                amount.numerator,
+                amount.denominator,
             )?;
             output_amount = CurrencyAmount::from_fractional_amount(
                 route.output.clone(),
-                token_amount.numerator(),
-                token_amount.denominator(),
+                token_amount.numerator,
+                token_amount.denominator,
             )?;
         } else {
             assert!(amount.currency.equals(&route.output), "OUTPUT");
@@ -123,13 +123,13 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
-                token_amount.numerator(),
-                token_amount.denominator(),
+                token_amount.numerator,
+                token_amount.denominator,
             )?;
             output_amount = CurrencyAmount::from_fractional_amount(
                 route.output.clone(),
-                amount.numerator(),
-                amount.denominator(),
+                amount.numerator,
+                amount.denominator,
             )?;
         }
         let execution_price = Price::new(
@@ -140,8 +140,8 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         );
         let price_impact = compute_price_impact(
             route.clone().mid_price()?,
-            input_amount.clone(),
-            output_amount.clone(),
+            &input_amount,
+            &output_amount.clone(), // TODO: check if clone is necessary
         )?;
         Ok(Trade {
             route,
@@ -162,7 +162,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     pub fn exact_in(
         route: Route<TInput, TOutput>,
         amount_in: CurrencyAmount<TInput>,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         Trade::new(route, amount_in, TradeType::ExactInput)
     }
 
@@ -175,7 +175,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     pub fn exact_out(
         route: Route<TInput, TOutput>,
         amount_out: CurrencyAmount<TOutput>,
-    ) -> Result<Self> {
+    ) -> Result<Self, Error> {
         Trade::new(route, amount_out, TradeType::ExactOutput)
     }
 
@@ -189,7 +189,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     pub fn minimum_amount_out(
         &self,
         slippage_tolerance: Percent,
-    ) -> Result<CurrencyAmount<TOutput>> {
+    ) -> Result<CurrencyAmount<TOutput>, Error> {
         assert!(
             slippage_tolerance >= Percent::new(0, 1),
             "SLIPPAGE_TOLERANCE"
@@ -213,7 +213,10 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
     ///   this trade
-    pub fn maximum_amount_in(&self, slippage_tolerance: Percent) -> Result<CurrencyAmount<TInput>> {
+    pub fn maximum_amount_in(
+        &self,
+        slippage_tolerance: Percent,
+    ) -> Result<CurrencyAmount<TInput>, Error> {
         assert!(
             slippage_tolerance >= Percent::new(0, 1),
             "SLIPPAGE_TOLERANCE"
@@ -256,7 +259,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         current_pairs: Vec<Pair>,
         next_amount_in: Option<CurrencyAmount<Token>>,
         best_trades: &mut Vec<Self>,
-    ) -> Result<&mut Vec<Self>> {
+    ) -> Result<&mut Vec<Self>, Error> {
         assert!(!pairs.is_empty(), "PAIRS");
         let max_num_results = best_trade_options.max_num_results.unwrap_or(3);
         let max_hops = best_trade_options.max_hops.unwrap_or(3);
@@ -285,7 +288,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                 Err(e) => return Err(e.into()),
             };
             // we have arrived at the output token, so this is the final trade of one of the paths
-            if amount_out.currency.equals(&token_out) {
+            if amount_out.currency.equals(token_out) {
                 let mut next_pairs = current_pairs.clone();
                 next_pairs.push(pair.clone());
                 let trade = Self::new(
@@ -333,7 +336,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     pub fn worst_execution_price(
         &self,
         slippage_tolerance: Percent,
-    ) -> Result<Price<TInput, TOutput>> {
+    ) -> Result<Price<TInput, TOutput>, Error> {
         Ok(Price::new(
             self.input_amount.currency.clone(),
             self.output_amount.currency.clone(),
@@ -367,7 +370,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         current_pairs: Vec<Pair>,
         next_amount_out: Option<CurrencyAmount<Token>>,
         best_trades: &mut Vec<Self>,
-    ) -> Result<&mut Vec<Self>> {
+    ) -> Result<&mut Vec<Self>, Error> {
         assert!(!pairs.is_empty(), "PAIRS");
         let max_num_results = best_trade_options.max_num_results.unwrap_or(3);
         let max_hops = best_trade_options.max_hops.unwrap_or(3);
@@ -396,7 +399,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                 Err(e) => return Err(e.into()),
             };
             // we have arrived at the input token, so this is the first trade of one of the paths
-            if amount_in.currency.equals(&token_in) {
+            if amount_in.currency.equals(token_in) {
                 let mut next_pairs = vec![pair.clone()];
                 next_pairs.extend(current_pairs.clone());
                 let trade = Self::new(
@@ -453,7 +456,7 @@ mod tests {
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000003", 18, "t2"));
     static TOKEN3: Lazy<Token> =
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000004", 18, "t3"));
-    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
+    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped().clone());
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
