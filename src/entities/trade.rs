@@ -150,6 +150,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `route`: The route of the exact in trade
     /// * `amount_in`: The amount being passed in
+    #[inline]
     pub fn exact_in(
         route: Route<TInput, TOutput>,
         amount_in: CurrencyAmount<TInput>,
@@ -163,6 +164,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `route`: The route of the exact out trade
     /// * `amount_out`: The amount returned by the trade
+    #[inline]
     pub fn exact_out(
         route: Route<TInput, TOutput>,
         amount_out: CurrencyAmount<TOutput>,
@@ -177,6 +179,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
     ///   this trade
+    #[inline]
     pub fn minimum_amount_out(
         &self,
         slippage_tolerance: Percent,
@@ -204,6 +207,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     ///
     /// * `slippage_tolerance`: The tolerance of unfavorable slippage from the execution price of
     ///   this trade
+    #[inline]
     pub fn maximum_amount_in(
         &self,
         slippage_tolerance: Percent,
@@ -322,6 +326,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
     /// ## Arguments
     ///
     /// * `slippage_tolerance`: The allowed tolerated slippage
+    #[inline]
     pub fn worst_execution_price(
         &self,
         slippage_tolerance: Percent,
