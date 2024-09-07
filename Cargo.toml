@@ -7,7 +7,7 @@ description = "Uniswap V2 SDK for Rust"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/shuhuiluo/uniswap-v2-sdk-rs"
-keywords = ["uniswap-v2", "ethereum", "rust", "sdk"]
+keywords = ["uniswap-v2", "ethereum", "sdk"]
 exclude = [".github", ".gitignore", "rustfmt.toml"]
 
 [package.metadata.docs.rs]

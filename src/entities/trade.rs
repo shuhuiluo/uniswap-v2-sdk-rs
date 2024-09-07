@@ -53,7 +53,7 @@ pub fn trade_comparator<TInput: Currency, TOutput: Currency>(
         Ordering::Greater => Ordering::Greater,
         Ordering::Equal => {
             // consider the number of hops since each hop costs gas
-            a.route.path.len().cmp(&b.route.path.len())
+            a.route.pairs.len().cmp(&b.route.pairs.len())
         }
     }
 }
@@ -93,16 +93,13 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         amount: CurrencyAmount<impl Currency>,
         trade_type: TradeType,
     ) -> Result<Self, Error> {
-        let len = route.path.len();
         let mut token_amount: CurrencyAmount<Token> = amount.wrapped()?;
         let input_amount: CurrencyAmount<TInput>;
         let output_amount: CurrencyAmount<TOutput>;
         if trade_type == TradeType::ExactInput {
             assert!(amount.currency.equals(&route.input), "INPUT");
-            for i in 0..len - 1 {
-                let pair = &route.pairs[i];
-                let (output_amount, _) = pair.get_output_amount(&token_amount, false)?;
-                token_amount = output_amount;
+            for pair in route.pairs.iter() {
+                (token_amount, _) = pair.get_output_amount(&token_amount, false)?;
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
@@ -116,10 +113,8 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             )?;
         } else {
             assert!(amount.currency.equals(&route.output), "OUTPUT");
-            for i in (1..len).rev() {
-                let pair = &route.pairs[i - 1];
-                let (input_amount, _) = pair.get_input_amount(&token_amount, false)?;
-                token_amount = input_amount;
+            for pair in route.pairs.iter().rev() {
+                (token_amount, _) = pair.get_input_amount(&token_amount, false)?;
             }
             input_amount = CurrencyAmount::from_fractional_amount(
                 route.input.clone(),
@@ -132,14 +127,13 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                 amount.denominator,
             )?;
         }
+        let price_impact = compute_price_impact(route.mid_price()?, &input_amount, &output_amount)?;
         let execution_price = Price::new(
             input_amount.currency.clone(),
             output_amount.currency.clone(),
             input_amount.quotient(),
             output_amount.quotient(),
         );
-        let price_impact =
-            compute_price_impact(route.clone().mid_price()?, &input_amount, &output_amount)?;
         Ok(Trade {
             route,
             trade_type,
@@ -201,7 +195,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             self.output_amount.currency.clone(),
             slippage_adjusted_amount_out,
         )
-        .map_err(|e| e.into())
+        .map_err(Error::Core)
     }
 
     /// Get the maximum amount in that can be spent via this trade for the given slippage tolerance
@@ -228,7 +222,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             self.input_amount.currency.clone(),
             slippage_adjusted_amount_in,
         )
-        .map_err(|e| e.into())
+        .map_err(Error::Core)
     }
 
     /// Given a list of pairs, and a fixed amount in, returns the top `max_num_results` trades that
@@ -271,9 +265,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         let token_out = currency_out.wrapped();
         for pair in pairs.iter() {
             // pair irrelevant
-            if !pair.token0().equals(&amount_in.currency)
-                && !pair.token1().equals(&amount_in.currency)
-            {
+            if !pair.involves_token(&amount_in.currency) {
                 continue;
             }
             if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
@@ -382,9 +374,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
         let token_in = currency_in.wrapped();
         for pair in pairs.iter() {
             // pair irrelevant
-            if !pair.token0().equals(&amount_out.currency)
-                && !pair.token1().equals(&amount_out.currency)
-            {
+            if !pair.involves_token(&amount_out.currency) {
                 continue;
             }
             if pair.reserve1().quotient().is_zero() || pair.reserve0().quotient().is_zero() {
@@ -608,7 +598,7 @@ mod tests {
 
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+            assert_eq!(result[0].route.path(), vec![TOKEN0.clone(), TOKEN2.clone()]);
             assert_eq!(
                 result[0].input_amount,
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap()
@@ -619,7 +609,7 @@ mod tests {
             );
             assert_eq!(result[1].route.pairs.len(), 2);
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![TOKEN0.clone(), TOKEN1.clone(), TOKEN2.clone()]
             );
             assert_eq!(
@@ -668,7 +658,7 @@ mod tests {
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+            assert_eq!(result[0].route.path(), vec![TOKEN0.clone(), TOKEN2.clone()]);
         }
 
         #[test]
@@ -687,7 +677,7 @@ mod tests {
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+            assert_eq!(result[0].route.path(), vec![TOKEN0.clone(), TOKEN2.clone()]);
             assert_eq!(
                 result[0].output_amount,
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1).unwrap()
@@ -753,13 +743,13 @@ mod tests {
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].input_amount.currency, ETHER.clone());
             assert_eq!(
-                result[0].route.path,
+                result[0].route.path(),
                 vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()],
             );
             assert_eq!(result[0].output_amount.currency, TOKEN3.clone());
             assert_eq!(result[1].input_amount.currency, ETHER.clone());
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]
             );
             assert_eq!(result[1].output_amount.currency, TOKEN3.clone());
@@ -787,13 +777,13 @@ mod tests {
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].input_amount.currency, TOKEN3.clone());
             assert_eq!(
-                result[0].route.path,
+                result[0].route.path(),
                 vec![TOKEN3.clone(), TOKEN0.clone(), WETH.clone()]
             );
             assert_eq!(result[0].output_amount.currency, ETHER.clone());
             assert_eq!(result[1].input_amount.currency, TOKEN3.clone());
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![TOKEN3.clone(), TOKEN1.clone(), TOKEN0.clone(), WETH.clone()]
             );
             assert_eq!(result[1].output_amount.currency, ETHER.clone());
@@ -1130,7 +1120,7 @@ mod tests {
 
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+            assert_eq!(result[0].route.path(), vec![TOKEN0.clone(), TOKEN2.clone()]);
             assert_eq!(
                 result[0].input_amount,
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 101).unwrap()
@@ -1141,7 +1131,7 @@ mod tests {
             );
             assert_eq!(result[1].route.pairs.len(), 2);
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![TOKEN0.clone(), TOKEN1.clone(), TOKEN2.clone()]
             );
             assert_eq!(
@@ -1190,7 +1180,7 @@ mod tests {
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].route.pairs.len(), 1);
-            assert_eq!(result[0].route.path, vec![TOKEN0.clone(), TOKEN2.clone()]);
+            assert_eq!(result[0].route.path(), vec![TOKEN0.clone(), TOKEN2.clone()]);
         }
 
         #[test]
@@ -1286,13 +1276,13 @@ mod tests {
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].input_amount.currency, ETHER.clone());
             assert_eq!(
-                result[0].route.path,
+                result[0].route.path(),
                 vec![WETH.clone(), TOKEN0.clone(), TOKEN1.clone(), TOKEN3.clone()],
             );
             assert_eq!(result[0].output_amount.currency, TOKEN3.clone());
             assert_eq!(result[1].input_amount.currency, ETHER.clone());
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![WETH.clone(), TOKEN0.clone(), TOKEN3.clone()]
             );
             assert_eq!(result[1].output_amount.currency, TOKEN3.clone());
@@ -1320,13 +1310,13 @@ mod tests {
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].input_amount.currency, TOKEN3.clone());
             assert_eq!(
-                result[0].route.path,
+                result[0].route.path(),
                 vec![TOKEN3.clone(), TOKEN0.clone(), WETH.clone()]
             );
             assert_eq!(result[0].output_amount.currency, ETHER.clone());
             assert_eq!(result[1].input_amount.currency, TOKEN3.clone());
             assert_eq!(
-                result[1].route.path,
+                result[1].route.path(),
                 vec![TOKEN3.clone(), TOKEN1.clone(), TOKEN0.clone(), WETH.clone()]
             );
             assert_eq!(result[1].output_amount.currency, ETHER.clone());
