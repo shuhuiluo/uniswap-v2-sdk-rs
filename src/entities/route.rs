@@ -1,13 +1,11 @@
-use crate::prelude::Pair;
+use crate::prelude::{Error, Pair};
 use alloy_primitives::ChainId;
-use anyhow::Result;
 use uniswap_sdk_core::prelude::*;
 
 /// Represents a list of pairs through which a swap can occur
 #[derive(Clone, PartialEq, Debug)]
 pub struct Route<TInput: Currency, TOutput: Currency> {
     pub pairs: Vec<Pair>,
-    pub path: Vec<Token>,
     /// The input token
     pub input: TInput,
     /// The output token
@@ -23,6 +21,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
     /// * `pairs`: An array of [`Pair`] objects, ordered by the route the swap will take
     /// * `input`: The input token
     /// * `output`: The output token
+    #[inline]
     pub fn new(pairs: Vec<Pair>, input: TInput, output: TOutput) -> Self {
         assert!(!pairs.is_empty(), "PAIRS");
         let chain_id = pairs[0].chain_id();
@@ -32,72 +31,77 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
         );
 
         let wrapped_input = input.wrapped();
-        assert!(pairs[0].involves_token(&wrapped_input), "INPUT");
+        assert!(pairs[0].involves_token(wrapped_input), "INPUT");
+        let wrapped_output = output.wrapped();
         assert!(
-            pairs.last().unwrap().involves_token(&output.wrapped()),
+            pairs.last().unwrap().involves_token(wrapped_output),
             "OUTPUT"
         );
 
-        let mut path: Vec<Token> = Vec::with_capacity(pairs.len() + 1);
-        path.push(wrapped_input);
-        for (i, pair) in pairs.iter().enumerate() {
-            let current_input = &path[i];
-            assert!(
-                current_input.equals(pair.token0()) || current_input.equals(pair.token1()),
-                "PATH"
-            );
-            let output = if current_input.equals(pair.token0()) {
+        let mut current_input_token = wrapped_input;
+        for pair in pairs.iter() {
+            current_input_token = if current_input_token.equals(pair.token0()) {
                 pair.token1()
-            } else {
+            } else if current_input_token.equals(pair.token1()) {
                 pair.token0()
+            } else {
+                panic!("PATH")
             };
-            path.push(output.clone());
         }
-        assert!(path.last().unwrap().equals(&output.wrapped()), "PATH");
+        assert!(current_input_token.equals(wrapped_output), "PATH");
 
         Route {
             pairs,
-            path,
             input,
             output,
             _mid_price: None,
         }
     }
 
+    #[inline]
+    pub fn path(&self) -> Vec<Token> {
+        let mut path: Vec<Token> = Vec::with_capacity(self.pairs.len() + 1);
+        path.push(self.input.wrapped().clone());
+        for (i, pair) in self.pairs.iter().enumerate() {
+            let output = if path[i].equals(pair.token0()) {
+                pair.token1()
+            } else {
+                pair.token0()
+            };
+            path.push(output.clone());
+        }
+        path
+    }
+
+    #[inline]
     pub fn chain_id(&self) -> ChainId {
         self.pairs[0].chain_id()
     }
 
     /// Returns the mid price of the route
-    pub fn mid_price(&mut self) -> Result<Price<TInput, TOutput>> {
+    #[inline]
+    pub fn mid_price(&self) -> Result<Price<TInput, TOutput>, Error> {
+        let mut price = self.pairs[0].price_of(self.input.wrapped())?;
+        for pair in self.pairs[1..].iter() {
+            price = price.multiply(&pair.price_of(&price.quote_currency)?)?;
+        }
+        Ok(Price::new(
+            self.input.clone(),
+            self.output.clone(),
+            price.denominator,
+            price.numerator,
+        ))
+    }
+
+    /// Returns the mid price of the route
+    #[inline]
+    pub fn mid_price_cached(&mut self) -> Result<Price<TInput, TOutput>, Error> {
         if let Some(mid_price) = &self._mid_price {
             return Ok(mid_price.clone());
         }
-        let mut price: Price<Token, Token>;
-        let mut next_input: &Token;
-        if self.pairs[0].token0().equals(&self.input.wrapped()) {
-            price = self.pairs[0].token0_price();
-            next_input = self.pairs[0].token1();
-        } else {
-            price = self.pairs[0].token1_price();
-            next_input = self.pairs[0].token0();
-        }
-        for pair in self.pairs[1..].iter() {
-            if next_input.equals(pair.token0()) {
-                next_input = pair.token1();
-                price = price.multiply(&pair.token0_price())?;
-            } else {
-                next_input = pair.token0();
-                price = price.multiply(&pair.token1_price())?;
-            }
-        }
-        self._mid_price = Some(Price::new(
-            self.input.clone(),
-            self.output.clone(),
-            price.denominator(),
-            price.numerator(),
-        ));
-        Ok(self._mid_price.clone().unwrap())
+        let mid_price = self.mid_price()?;
+        self._mid_price = Some(mid_price.clone());
+        Ok(mid_price)
     }
 }
 
@@ -112,7 +116,7 @@ mod tests {
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
     static TOKEN1: Lazy<Token> =
         Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
-    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped());
+    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped().clone());
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
@@ -139,7 +143,7 @@ mod tests {
     fn constructs_a_path_from_the_tokens() {
         let route = Route::new(vec![PAIR_0_1.clone()], TOKEN0.clone(), TOKEN1.clone());
         assert_eq!(route.pairs, vec![PAIR_0_1.clone()]);
-        assert_eq!(route.path, vec![TOKEN0.clone(), TOKEN1.clone()]);
+        assert_eq!(route.path(), vec![TOKEN0.clone(), TOKEN1.clone()]);
         assert_eq!(route.input, TOKEN0.clone());
         assert_eq!(route.output, TOKEN1.clone());
         assert_eq!(route.chain_id(), 1);
