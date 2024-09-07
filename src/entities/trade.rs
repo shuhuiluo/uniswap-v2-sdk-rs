@@ -1,9 +1,9 @@
 use crate::prelude::{Error, *};
-use anyhow::Result;
 use uniswap_sdk_core::prelude::{
     compute_price_impact::compute_price_impact, sorted_insert::sorted_insert, *,
 };
 
+#[allow(clippy::too_long_first_doc_paragraph)]
 /// Comparator function to allow sorting of trades by their output amounts, in decreasing order, and
 /// then input amounts in increasing order. i.e. the best trades have the most outputs for the least
 /// inputs and are sorted first.
@@ -138,11 +138,8 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             input_amount.quotient(),
             output_amount.quotient(),
         );
-        let price_impact = compute_price_impact(
-            route.clone().mid_price()?,
-            &input_amount,
-            &output_amount.clone(), // TODO: check if clone is necessary
-        )?;
+        let price_impact =
+            compute_price_impact(route.clone().mid_price()?, &input_amount, &output_amount)?;
         Ok(Trade {
             route,
             trade_type,
@@ -285,7 +282,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             let amount_out = match pair.get_output_amount(&amount_in, false) {
                 Ok((amount_out, _)) => amount_out,
                 Err(Error::InsufficientInputAmount) => continue,
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             };
             // we have arrived at the output token, so this is the final trade of one of the paths
             if amount_out.currency.equals(token_out) {
@@ -396,7 +393,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
             let amount_in = match pair.get_input_amount(&amount_out, false) {
                 Ok((amount_in, _)) => amount_in,
                 Err(Error::InsufficientReserves) => continue,
-                Err(e) => return Err(e.into()),
+                Err(e) => return Err(e),
             };
             // we have arrived at the input token, so this is the first trade of one of the paths
             if amount_in.currency.equals(token_in) {

@@ -33,7 +33,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
         let wrapped_input = input.wrapped().clone();
         assert!(pairs[0].involves_token(&wrapped_input), "INPUT");
         assert!(
-            pairs.last().unwrap().involves_token(&output.wrapped()),
+            pairs.last().unwrap().involves_token(output.wrapped()),
             "OUTPUT"
         );
 

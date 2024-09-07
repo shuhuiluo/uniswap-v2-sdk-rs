@@ -142,11 +142,11 @@ impl Pair {
         &self.token_amounts[1].currency
     }
 
-    pub fn reserve0(&self) -> &CurrencyAmount<Token> {
+    pub const fn reserve0(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[0]
     }
 
-    pub fn reserve1(&self) -> &CurrencyAmount<Token> {
+    pub const fn reserve1(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[1]
     }
 
@@ -223,7 +223,7 @@ impl Pair {
                 (percent_after_buy_fees.as_fraction() * output_amount.as_fraction()).quotient(),
             )?
         } else {
-            output_amount.clone()
+            output_amount
         };
         if output_amount_after_tax.quotient().is_zero() {
             return Err(Error::InsufficientInputAmount);
@@ -562,13 +562,13 @@ mod tests {
                 *Pair::new(USDC_AMOUNT.clone(), dai_amount.clone(),)
                     .unwrap()
                     .reserve0(),
-                dai_amount.clone()
+                dai_amount
             );
             assert_eq!(
                 *Pair::new(dai_amount.clone(), USDC_AMOUNT.clone(),)
                     .unwrap()
                     .reserve0(),
-                dai_amount.clone()
+                dai_amount
             );
         }
 
@@ -582,7 +582,7 @@ mod tests {
                 USDC_AMOUNT.clone()
             );
             assert_eq!(
-                *Pair::new(dai_amount.clone(), USDC_AMOUNT.clone(),)
+                *Pair::new(dai_amount, USDC_AMOUNT.clone(),)
                     .unwrap()
                     .reserve1(),
                 USDC_AMOUNT.clone()
@@ -636,7 +636,7 @@ mod tests {
 
         #[test]
         fn price_of_throws_if_invalid_token() {
-            let result = PAIR.price_of(&Ether::on_chain(1).wrapped());
+            let result = PAIR.price_of(Ether::on_chain(1).wrapped());
             assert!(result.is_err());
         }
 
@@ -666,7 +666,7 @@ mod tests {
                 USDC_AMOUNT.clone()
             )
             .unwrap()
-            .reserve_of(&Ether::on_chain(1).wrapped())
+            .reserve_of(Ether::on_chain(1).wrapped())
             .is_err());
         }
 
@@ -685,7 +685,7 @@ mod tests {
         fn involves_token() {
             assert!(PAIR.involves_token(&USDC));
             assert!(PAIR.involves_token(&DAI));
-            assert!(!PAIR.involves_token(&Ether::on_chain(1).wrapped()));
+            assert!(!PAIR.involves_token(Ether::on_chain(1).wrapped()));
         }
 
         mod get_input_amount_and_get_output_amount {
@@ -858,8 +858,8 @@ mod tests {
                 assert_eq!(
                     pair.get_liquidity_minted(
                         &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 0).unwrap(),
-                        &CurrencyAmount::from_raw_amount(token_a.clone(), 1001).unwrap(),
-                        &CurrencyAmount::from_raw_amount(token_b.clone(), 1001).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a, 1001).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b, 1001).unwrap(),
                     )
                     .unwrap()
                     .quotient()
@@ -882,8 +882,8 @@ mod tests {
                     pair.get_liquidity_minted(
                         &CurrencyAmount::from_raw_amount(pair.liquidity_token.clone(), 10000)
                             .unwrap(),
-                        &CurrencyAmount::from_raw_amount(token_a.clone(), 2000).unwrap(),
-                        &CurrencyAmount::from_raw_amount(token_b.clone(), 2000).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_a, 2000).unwrap(),
+                        &CurrencyAmount::from_raw_amount(token_b, 2000).unwrap(),
                     )
                     .unwrap()
                     .quotient()
@@ -951,7 +951,7 @@ mod tests {
                 let token_b = token!(3, "0000000000000000000000000000000000000002", 18);
                 let pair = Pair::new(
                     CurrencyAmount::from_raw_amount(token_a.clone(), 1000).unwrap(),
-                    CurrencyAmount::from_raw_amount(token_b.clone(), 1000).unwrap(),
+                    CurrencyAmount::from_raw_amount(token_b, 1000).unwrap(),
                 )
                 .unwrap();
 
