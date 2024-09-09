@@ -589,15 +589,15 @@ mod tests {
 
         #[test]
         fn provides_the_best_route() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
                 TOKEN2.clone(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -629,15 +629,15 @@ mod tests {
 
         #[test]
         fn doesnt_throw_for_zero_liquidity_pairs() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![EMPTY_PAIR_0_1.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
                 TOKEN1.clone(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -646,8 +646,8 @@ mod tests {
 
         #[test]
         fn respects_max_hops() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
                 TOKEN2.clone(),
@@ -657,7 +657,7 @@ mod tests {
                 },
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -668,15 +668,15 @@ mod tests {
 
         #[test]
         fn insufficient_input_for_one_pair() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1).unwrap(),
                 TOKEN2.clone(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -691,8 +691,8 @@ mod tests {
 
         #[test]
         fn respects_max_num_results() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
                 TOKEN2.clone(),
@@ -702,7 +702,7 @@ mod tests {
                 },
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -711,15 +711,15 @@ mod tests {
 
         #[test]
         fn no_path() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
                 CurrencyAmount::from_raw_amount(TOKEN0.clone(), 10).unwrap(),
                 TOKEN2.clone(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -728,8 +728,8 @@ mod tests {
 
         #[test]
         fn works_for_ether_currency_input() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![
                     PAIR_WETH_0.clone(),
                     PAIR_0_1.clone(),
@@ -741,7 +741,7 @@ mod tests {
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -762,8 +762,8 @@ mod tests {
 
         #[test]
         fn works_for_ether_currency_output() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_in(
+            let result = &mut vec![];
+            Trade::best_trade_exact_in(
                 vec![
                     PAIR_WETH_0.clone(),
                     PAIR_0_1.clone(),
@@ -775,7 +775,7 @@ mod tests {
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1111,15 +1111,15 @@ mod tests {
 
         #[test]
         fn provides_the_best_route() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 100).unwrap(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1151,15 +1151,15 @@ mod tests {
 
         #[test]
         fn doesnt_throw_for_zero_liquidity_pairs() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![EMPTY_PAIR_0_1.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN1.clone(), 100).unwrap(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1168,8 +1168,8 @@ mod tests {
 
         #[test]
         fn respects_max_hops() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
@@ -1179,7 +1179,7 @@ mod tests {
                 },
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1189,16 +1189,16 @@ mod tests {
         }
 
         #[test]
-        fn insufficient_liqidity() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+        fn insufficient_liquidity() {
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1200).unwrap(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1206,16 +1206,16 @@ mod tests {
         }
 
         #[test]
-        fn insufficent_liqidity_in_one_pair_but_not_the_other() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+        fn insufficient_liquidity_in_one_pair_but_not_the_other() {
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 1050).unwrap(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1224,8 +1224,8 @@ mod tests {
 
         #[test]
         fn respects_max_num_results() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_2.clone(), PAIR_1_2.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
@@ -1235,7 +1235,7 @@ mod tests {
                 },
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1244,15 +1244,15 @@ mod tests {
 
         #[test]
         fn no_path() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![PAIR_0_1.clone(), PAIR_0_3.clone(), PAIR_1_3.clone()],
                 TOKEN0.clone(),
                 CurrencyAmount::from_raw_amount(TOKEN2.clone(), 10).unwrap(),
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1261,8 +1261,8 @@ mod tests {
 
         #[test]
         fn works_for_ether_currency_input() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![
                     PAIR_WETH_0.clone(),
                     PAIR_0_1.clone(),
@@ -1274,7 +1274,7 @@ mod tests {
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
@@ -1295,8 +1295,8 @@ mod tests {
 
         #[test]
         fn works_for_ether_currency_output() {
-            let mut binding = vec![];
-            let result = Trade::best_trade_exact_out(
+            let result = &mut vec![];
+            Trade::best_trade_exact_out(
                 vec![
                     PAIR_WETH_0.clone(),
                     PAIR_0_1.clone(),
@@ -1308,7 +1308,7 @@ mod tests {
                 Default::default(),
                 vec![],
                 None,
-                &mut binding,
+                result,
             )
             .unwrap();
 
