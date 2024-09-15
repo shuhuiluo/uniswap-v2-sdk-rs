@@ -444,26 +444,9 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::*;
     use once_cell::sync::Lazy;
-    use uniswap_sdk_core::token;
 
-    static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));
-    static TOKEN0: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
-    static TOKEN1: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
-    static TOKEN2: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000003", 18, "t2"));
-    static TOKEN3: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000004", 18, "t3"));
-    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped().clone());
-    static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
-        Pair::new(
-            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
-            CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1000).unwrap(),
-        )
-        .unwrap()
-    });
     static PAIR_0_2: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
@@ -489,13 +472,6 @@ mod tests {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN1.clone(), 1200).unwrap(),
             CurrencyAmount::from_raw_amount(TOKEN3.clone(), 1300).unwrap(),
-        )
-        .unwrap()
-    });
-    static PAIR_WETH_0: Lazy<Pair> = Lazy::new(|| {
-        Pair::new(
-            CurrencyAmount::from_raw_amount(WETH.clone(), 1000).unwrap(),
-            CurrencyAmount::from_raw_amount(TOKEN0.clone(), 1000).unwrap(),
         )
         .unwrap()
     });
