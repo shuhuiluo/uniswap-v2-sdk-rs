@@ -24,6 +24,7 @@ pub enum Error {
 }
 
 impl From<CoreError> for Error {
+    #[inline]
     fn from(error: CoreError) -> Self {
         Error::Core(error)
     }
