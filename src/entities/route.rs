@@ -39,7 +39,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
         );
 
         let mut current_input_token = wrapped_input;
-        for pair in pairs.iter() {
+        for pair in &pairs {
             current_input_token = if current_input_token.equals(pair.token0()) {
                 pair.token1()
             } else if current_input_token.equals(pair.token1()) {
@@ -82,7 +82,7 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
     #[inline]
     pub fn mid_price(&self) -> Result<Price<TInput, TOutput>, Error> {
         let mut price = self.pairs[0].price_of(self.input.wrapped())?;
-        for pair in self.pairs[1..].iter() {
+        for pair in &self.pairs[1..] {
             price = price.multiply(&pair.price_of(&price.quote_currency)?)?;
         }
         Ok(Price::new(

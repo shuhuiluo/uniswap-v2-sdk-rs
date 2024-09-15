@@ -25,6 +25,7 @@ use uniswap_sdk_core::{prelude::*, token};
 /// assert_eq!(result, address!("b50b5182D6a47EC53a469395AF44e371d7C76ed4"));
 /// ```
 #[inline]
+#[must_use]
 pub fn compute_pair_address(factory: Address, token_a: Address, token_b: Address) -> Address {
     let (token_0, token_1) = if token_a < token_b {
         (token_a, token_b)
@@ -79,6 +80,7 @@ impl Pair {
     }
 
     #[inline]
+    #[must_use]
     pub fn address(&self) -> Address {
         self.liquidity_token.address()
     }
@@ -89,6 +91,7 @@ impl Pair {
     ///
     /// * `token`: token to check
     #[inline]
+    #[must_use]
     pub fn involves_token(&self, token: &Token) -> bool {
         self.token0().equals(token) || self.token1().equals(token)
     }
@@ -96,6 +99,7 @@ impl Pair {
     /// Returns the current mid price of the pair in terms of token0, i.e. the ratio of reserve1 to
     /// reserve0
     #[inline]
+    #[must_use]
     pub fn token0_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[1].as_fraction() / self.token_amounts[0].as_fraction();
         Price::new(
@@ -109,6 +113,7 @@ impl Pair {
     /// Returns the current mid price of the pair in terms of token1, i.e. the ratio of reserve0 to
     /// reserve1
     #[inline]
+    #[must_use]
     pub fn token1_price(&self) -> Price<Token, Token> {
         let result = self.token_amounts[0].as_fraction() / self.token_amounts[1].as_fraction();
         Price::new(
@@ -136,26 +141,31 @@ impl Pair {
     }
 
     #[inline]
+    #[must_use]
     pub fn chain_id(&self) -> u64 {
         self.token0().chain_id
     }
 
     #[inline]
+    #[must_use]
     pub fn token0(&self) -> &Token {
         &self.reserve0().currency
     }
 
     #[inline]
+    #[must_use]
     pub fn token1(&self) -> &Token {
         &self.reserve1().currency
     }
 
     #[inline]
+    #[must_use]
     pub const fn reserve0(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[0]
     }
 
     #[inline]
+    #[must_use]
     pub const fn reserve1(&self) -> &CurrencyAmount<Token> {
         &self.token_amounts[1]
     }
@@ -171,6 +181,7 @@ impl Pair {
         }
     }
 
+    #[inline]
     pub fn get_output_amount(
         &self,
         input_amount: &CurrencyAmount<Token>,
@@ -239,6 +250,7 @@ impl Pair {
         Ok((output_amount_after_tax, pair))
     }
 
+    #[inline]
     pub fn get_input_amount(
         &self,
         output_amount: &CurrencyAmount<Token>,
@@ -309,6 +321,7 @@ impl Pair {
         Ok((input_amount_before_tax, pair))
     }
 
+    #[inline]
     pub fn get_liquidity_minted(
         &self,
         total_supply: &CurrencyAmount<Token>,
@@ -349,6 +362,7 @@ impl Pair {
             .map_err(Error::Core)
     }
 
+    #[inline]
     pub fn get_liquidity_value(
         &self,
         token: &Token,
@@ -692,9 +706,9 @@ mod tests {
         mod get_input_amount_and_get_output_amount {
             use super::*;
 
-            static BLAST_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(400u32));
+            static BLAST_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(400_u32));
 
-            static BLAST_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(10000u32));
+            static BLAST_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(10000_u32));
 
             static BLAST: Lazy<Token> = Lazy::new(|| {
                 Token::new(
@@ -718,9 +732,9 @@ mod tests {
                 )
             });
 
-            static BLASTERS_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(300u32));
+            static BLASTERS_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(300_u32));
 
-            static BLASTERS_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(350u32));
+            static BLASTERS_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(350_u32));
 
             static BLASTERS: Lazy<Token> = Lazy::new(|| {
                 Token::new(
