@@ -447,6 +447,7 @@ impl Pair {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::*;
     use once_cell::sync::Lazy;
 
     static USDC: Lazy<Token> = Lazy::new(|| {
@@ -456,15 +457,6 @@ mod tests {
             18,
             "USDC",
             "USD Coin"
-        )
-    });
-    static DAI: Lazy<Token> = Lazy::new(|| {
-        token!(
-            1,
-            "6B175474E89094C44Da98b954EedeAC495271d0F",
-            18,
-            "DAI",
-            "DAI Stablecoin"
         )
     });
 

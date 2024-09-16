@@ -31,8 +31,12 @@ extern crate alloc;
 pub mod constants;
 pub mod entities;
 pub mod error;
+pub mod router;
+
+#[cfg(test)]
+mod tests;
 
 pub mod prelude {
-    pub use crate::{constants::*, entities::*, error::*};
+    pub use crate::{constants::*, entities::*, error::*, router::*};
     pub use alloc::vec;
 }

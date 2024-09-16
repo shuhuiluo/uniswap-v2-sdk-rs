@@ -108,15 +108,9 @@ impl<TInput: Currency, TOutput: Currency> Route<TInput, TOutput> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tests::*;
     use once_cell::sync::Lazy;
-    use uniswap_sdk_core::token;
 
-    static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));
-    static TOKEN0: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000001", 18, "t0"));
-    static TOKEN1: Lazy<Token> =
-        Lazy::new(|| token!(1, "0000000000000000000000000000000000000002", 18, "t1"));
-    static WETH: Lazy<Token> = Lazy::new(|| ETHER.wrapped().clone());
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
             CurrencyAmount::from_raw_amount(TOKEN0.clone(), 100).unwrap(),
