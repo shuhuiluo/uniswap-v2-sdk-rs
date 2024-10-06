@@ -1,3 +1,4 @@
+mod entities_test;
 mod pair;
 mod route;
 mod trade;
