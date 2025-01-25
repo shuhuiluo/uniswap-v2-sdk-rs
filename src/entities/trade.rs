@@ -1,14 +1,15 @@
 use crate::prelude::{Error, *};
-use uniswap_sdk_core::prelude::{
-    compute_price_impact::compute_price_impact, sorted_insert::sorted_insert, *,
-};
+use alloc::vec;
+use core::cmp::Ordering;
+use num_traits::Zero;
+use uniswap_sdk_core::prelude::*;
 
 #[allow(clippy::too_long_first_doc_paragraph)]
 /// Comparator function to allow sorting of trades by their output amounts, in decreasing order, and
 /// then input amounts in increasing order. i.e. the best trades have the most outputs for the least
 /// inputs and are sorted first.
 #[inline]
-pub fn input_output_comparator<TInput: Currency, TOutput: Currency>(
+pub fn input_output_comparator<TInput: BaseCurrency, TOutput: BaseCurrency>(
     a: &Trade<TInput, TOutput>,
     b: &Trade<TInput, TOutput>,
 ) -> Ordering {
@@ -40,7 +41,7 @@ pub fn input_output_comparator<TInput: Currency, TOutput: Currency>(
 /// Extension of the input output comparator that also considers other dimensions of the trade in
 /// ranking them.
 #[inline]
-pub fn trade_comparator<TInput: Currency, TOutput: Currency>(
+pub fn trade_comparator<TInput: BaseCurrency, TOutput: BaseCurrency>(
     a: &Trade<TInput, TOutput>,
     b: &Trade<TInput, TOutput>,
 ) -> Ordering {
@@ -72,7 +73,7 @@ pub struct BestTradeOptions {
 ///
 /// Does not account for slippage, i.e. trades that front run this trade and move the price.
 #[derive(Clone, PartialEq, Debug)]
-pub struct Trade<TInput: Currency, TOutput: Currency> {
+pub struct Trade<TInput: BaseCurrency, TOutput: BaseCurrency> {
     /// The route of the trade, i.e. which pairs the trade goes through and the input/output
     /// currencies.
     pub route: Route<TInput, TOutput>,
@@ -89,14 +90,14 @@ pub struct Trade<TInput: Currency, TOutput: Currency> {
     pub price_impact: Percent,
 }
 
-impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
+impl<TInput: BaseCurrency, TOutput: BaseCurrency> Trade<TInput, TOutput> {
     #[inline]
     pub fn new(
         route: Route<TInput, TOutput>,
-        amount: CurrencyAmount<impl Currency>,
+        amount: CurrencyAmount<impl BaseCurrency>,
         trade_type: TradeType,
     ) -> Result<Self, Error> {
-        let mut token_amount: CurrencyAmount<Token> = amount.wrapped()?;
+        let mut token_amount: CurrencyAmount<Token> = amount.wrapped_owned()?;
         let input_amount: CurrencyAmount<TInput>;
         let output_amount: CurrencyAmount<TOutput>;
         if trade_type == TradeType::ExactInput {
@@ -270,7 +271,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                 assert!(!current_pairs.is_empty(), "INVALID_RECURSION");
                 amount_in
             }
-            None => currency_amount_in.wrapped()?,
+            None => currency_amount_in.wrapped_owned()?,
         };
         let token_out = currency_out.wrapped();
         for pair in &pairs {
@@ -299,7 +300,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                     currency_amount_in.clone(),
                     TradeType::ExactInput,
                 )?;
-                sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
+                sorted_insert(best_trades, trade, max_num_results, trade_comparator);
             } else if max_hops > 1 && pairs.len() > 1 {
                 let pairs_excluding_this_pair = pairs
                     .iter()
@@ -382,7 +383,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                 assert!(!current_pairs.is_empty(), "INVALID_RECURSION");
                 amount_out
             }
-            None => currency_amount_out.wrapped()?,
+            None => currency_amount_out.wrapped_owned()?,
         };
         let token_in = currency_in.wrapped();
         for pair in &pairs {
@@ -411,7 +412,7 @@ impl<TInput: Currency, TOutput: Currency> Trade<TInput, TOutput> {
                     currency_amount_out.clone(),
                     TradeType::ExactOutput,
                 )?;
-                sorted_insert(best_trades, trade, max_num_results, trade_comparator)?;
+                sorted_insert(best_trades, trade, max_num_results, trade_comparator);
             } else if max_hops > 1 && pairs.len() > 1 {
                 let pairs_excluding_this_pair = pairs
                     .iter()

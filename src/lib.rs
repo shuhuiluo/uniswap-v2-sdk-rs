@@ -38,5 +38,6 @@ mod tests;
 
 pub mod prelude {
     pub use crate::{constants::*, entities::*, error::*, router::*};
-    pub use alloc::vec;
+
+    pub use uniswap_sdk_core as sdk_core;
 }

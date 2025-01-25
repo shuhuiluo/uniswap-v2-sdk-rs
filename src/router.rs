@@ -38,7 +38,7 @@ pub struct MethodParameters {
 /// * `trade`: The trade to produce call parameters for
 /// * `options`: The options for the call parameters
 #[inline]
-pub fn swap_call_parameters<TInput: Currency, TOutput: Currency>(
+pub fn swap_call_parameters<TInput: BaseCurrency, TOutput: BaseCurrency>(
     trade: &Trade<TInput, TOutput>,
     options: TradeOptions,
 ) -> Result<MethodParameters, Error> {
@@ -258,7 +258,7 @@ sol! {
 mod tests {
     use super::*;
     use crate::tests::*;
-    use alloy_primitives::{hex, uint};
+    use alloy_primitives::{address, hex, uint};
     use once_cell::sync::Lazy;
 
     static TRADE_OPTIONS: Lazy<TradeOptions> = Lazy::new(|| TradeOptions {

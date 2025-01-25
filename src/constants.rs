@@ -1,10 +1,6 @@
 use alloy_primitives::{address, b256, Address, B256};
 use once_cell::sync::Lazy;
-use rustc_hash::FxHashMap;
-use uniswap_sdk_core::{
-    addresses::V2_FACTORY_ADDRESSES,
-    prelude::{BigInt, Percent},
-};
+use uniswap_sdk_core::prelude::{BigInt, FxHashMap, Percent, V2_FACTORY_ADDRESSES};
 
 pub const FACTORY_ADDRESS: Address = address!("5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f");
 
