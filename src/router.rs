@@ -259,7 +259,6 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use alloy_primitives::{address, hex, uint};
-    use once_cell::sync::Lazy;
 
     static TRADE_OPTIONS: Lazy<TradeOptions> = Lazy::new(|| TradeOptions {
         allowed_slippage: Percent::new(1, 100),

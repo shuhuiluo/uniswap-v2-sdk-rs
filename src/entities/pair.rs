@@ -422,12 +422,11 @@ impl Pair {
     #[inline]
     fn derive_percent_after_sell_fees(&self, input_token: &Token) -> Percent {
         let sell_fee_bips = if self.token0().equals(input_token) {
-            self.token0().sell_fee_bps.clone()
+            self.token0().sell_fee_bps
         } else {
-            self.token1().sell_fee_bps.clone()
-        }
-        .unwrap_or(BigUint::ZERO);
-        if sell_fee_bips > BigUint::ZERO {
+            self.token1().sell_fee_bps
+        };
+        if sell_fee_bips > 0 {
             ONE_HUNDRED_PERCENT.clone() - Percent::new(sell_fee_bips, BASIS_POINTS.clone())
         } else {
             ZERO_PERCENT.clone()
@@ -437,12 +436,11 @@ impl Pair {
     #[inline]
     fn derive_percent_after_buy_fees(&self, output_token: &Token) -> Percent {
         let buy_fee_bips = if self.token0().equals(output_token) {
-            self.token0().buy_fee_bps.clone()
+            self.token0().buy_fee_bps
         } else {
-            self.token1().buy_fee_bps.clone()
-        }
-        .unwrap_or(BigUint::ZERO);
-        if buy_fee_bips > BigUint::ZERO {
+            self.token1().buy_fee_bps
+        };
+        if buy_fee_bips > 0 {
             ONE_HUNDRED_PERCENT.clone() - Percent::new(buy_fee_bips, BASIS_POINTS.clone())
         } else {
             ZERO_PERCENT.clone()
@@ -455,7 +453,6 @@ mod tests {
     use super::*;
     use crate::tests::*;
     use alloy_primitives::address;
-    use once_cell::sync::Lazy;
 
     static USDC: Lazy<Token> = Lazy::new(|| {
         token!(
@@ -705,10 +702,6 @@ mod tests {
         mod get_input_amount_and_get_output_amount {
             use super::*;
 
-            static BLAST_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(400_u32));
-
-            static BLAST_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(10000_u32));
-
             static BLAST: Lazy<Token> = Lazy::new(|| {
                 Token::new(
                     1,
@@ -716,8 +709,8 @@ mod tests {
                     18,
                     Some("BLAST".to_string()),
                     Some("BLAST".to_string()),
-                    Some(BLAST_BUY_FEE_BPS.clone()),
-                    Some(BLAST_SELL_FEE_BPS.clone()),
+                    400_u64,
+                    10000_u64,
                 )
             });
 
@@ -731,10 +724,6 @@ mod tests {
                 )
             });
 
-            static BLASTERS_BUY_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(300_u32));
-
-            static BLASTERS_SELL_FEE_BPS: Lazy<BigUint> = Lazy::new(|| BigUint::from(350_u32));
-
             static BLASTERS: Lazy<Token> = Lazy::new(|| {
                 Token::new(
                     1,
@@ -742,8 +731,8 @@ mod tests {
                     9,
                     Some("BLAST".to_string()),
                     Some("BLASTERS".to_string()),
-                    Some(BLASTERS_BUY_FEE_BPS.clone()),
-                    Some(BLASTERS_SELL_FEE_BPS.clone()),
+                    300_u64,
+                    350_u64,
                 )
             });
 

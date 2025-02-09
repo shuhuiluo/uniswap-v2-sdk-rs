@@ -1,5 +1,6 @@
 use crate::entities::Pair;
-use once_cell::sync::Lazy;
+pub(crate) use alloc::vec;
+pub(crate) use once_cell::sync::Lazy;
 use uniswap_sdk_core::{prelude::*, token};
 
 pub(crate) static ETHER: Lazy<Ether> = Lazy::new(|| Ether::on_chain(1));

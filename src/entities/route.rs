@@ -109,7 +109,6 @@ impl<TInput: BaseCurrency, TOutput: BaseCurrency> Route<TInput, TOutput> {
 mod tests {
     use super::*;
     use crate::tests::*;
-    use once_cell::sync::Lazy;
 
     static PAIR_0_1: Lazy<Pair> = Lazy::new(|| {
         Pair::new(
