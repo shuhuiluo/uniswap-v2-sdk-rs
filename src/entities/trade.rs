@@ -446,7 +446,6 @@ impl<TInput: BaseCurrency, TOutput: BaseCurrency> Trade<TInput, TOutput> {
 mod tests {
     use super::*;
     use crate::tests::*;
-    use once_cell::sync::Lazy;
 
     static PAIR_0_2: Lazy<Pair> = Lazy::new(|| {
         Pair::new(

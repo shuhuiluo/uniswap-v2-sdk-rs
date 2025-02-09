@@ -1,10 +1,12 @@
-use alloy_primitives::{address, b256, Address, B256};
+use alloy_primitives::{b256, Address, B256};
 use once_cell::sync::Lazy;
-use uniswap_sdk_core::prelude::{BigInt, FxHashMap, Percent, V2_FACTORY_ADDRESSES};
+use uniswap_sdk_core::prelude::{
+    BigInt, HashMap, Percent, V2_FACTORY_ADDRESS, V2_FACTORY_ADDRESSES,
+};
 
-pub const FACTORY_ADDRESS: Address = address!("5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f");
+pub const FACTORY_ADDRESS: Address = V2_FACTORY_ADDRESS;
 
-pub static FACTORY_ADDRESS_MAP: Lazy<FxHashMap<u64, Address>> =
+pub static FACTORY_ADDRESS_MAP: Lazy<HashMap<u64, Address>> =
     Lazy::new(|| V2_FACTORY_ADDRESSES.clone());
 
 pub const INIT_CODE_HASH: B256 =
@@ -13,8 +15,6 @@ pub const INIT_CODE_HASH: B256 =
 pub static MINIMUM_LIQUIDITY: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
 
 // exports for internal consumption
-pub(crate) const _ZERO: BigInt = BigInt::ZERO;
-pub(crate) static _ONE: Lazy<BigInt> = Lazy::new(|| BigInt::from(1));
 pub(crate) static FIVE: Lazy<BigInt> = Lazy::new(|| BigInt::from(5));
 pub(crate) static _997: Lazy<BigInt> = Lazy::new(|| BigInt::from(997));
 pub(crate) static _1000: Lazy<BigInt> = Lazy::new(|| BigInt::from(1000));
