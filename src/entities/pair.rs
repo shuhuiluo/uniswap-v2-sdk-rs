@@ -2,7 +2,7 @@ use crate::prelude::{Error, *};
 use alloc::string::ToString;
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
-use num_traits::Zero;
+use uniswap_sdk_core::utils::sqrt::sqrt;
 use uniswap_sdk_core::{prelude::*, token};
 
 /// Computes the address of a Uniswap V2 pair
@@ -352,8 +352,9 @@ impl Pair {
         }
 
         let liquidity = if total_supply.quotient().is_zero() {
-            (token_amounts.0.quotient() * token_amounts.1.quotient()).sqrt()
-                - MINIMUM_LIQUIDITY.clone()
+            let result = token_amounts.0.quotient() * token_amounts.1.quotient();
+            let result = sqrt(result)?;
+            result - MINIMUM_LIQUIDITY.clone()
         } else {
             let amount0 =
                 (token_amounts.0.quotient() * total_supply.quotient()) / self.reserve0().quotient();
@@ -396,8 +397,9 @@ impl Pair {
             if k_last.is_zero() {
                 total_supply.clone()
             } else {
-                let root_k = (self.reserve0().quotient() * self.reserve1().quotient()).sqrt();
-                let root_k_last = k_last.sqrt();
+                let root_k = self.reserve0().quotient() * self.reserve1().quotient();
+                let root_k = sqrt(root_k)?;
+                let root_k_last = sqrt(k_last)?;
                 if root_k > root_k_last {
                     let numerator = total_supply.quotient() * (&root_k - &root_k_last);
                     let denominator = root_k * FIVE.clone() + root_k_last;

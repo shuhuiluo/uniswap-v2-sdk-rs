@@ -4,7 +4,6 @@
 use crate::prelude::{Error, *};
 use alloy_primitives::{Bytes, U256};
 use alloy_sol_types::{sol, SolCall};
-use num_bigint::{BigInt, Sign};
 use uniswap_sdk_core::prelude::*;
 
 /// Options for producing the arguments to send call to the router.
@@ -174,12 +173,17 @@ pub fn swap_call_parameters<TInput: BaseCurrency, TOutput: BaseCurrency>(
 }
 
 #[inline]
-fn from_big_int(x: &BigInt) -> U256 {
-    let (sign, data) = x.to_u64_digits();
+fn from_big_int(item: &uniswap_sdk_core::prelude::BigInt) -> U256 {
+    if item.is_zero() {
+        return U256::ZERO;
+    }
+    let sign = item.is_positive();
+    let bits = item.to_bits();
+    let digits = bits.digits();
+    let result = U256::from_limbs_slice(digits);
     match sign {
-        Sign::Plus => U256::from_limbs_slice(&data),
-        Sign::NoSign => U256::ZERO,
-        Sign::Minus => -U256::from_limbs_slice(&data),
+        true => result,
+        false => -result,
     }
 }
 

@@ -1,7 +1,6 @@
 use crate::prelude::{Error, *};
 use alloc::vec;
 use core::cmp::Ordering;
-use num_traits::Zero;
 use uniswap_sdk_core::prelude::*;
 
 #[allow(clippy::too_long_first_doc_paragraph)]
