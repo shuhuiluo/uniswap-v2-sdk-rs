@@ -1,7 +1,6 @@
 use crate::prelude::{Error, *};
 use alloc::vec;
 use core::cmp::Ordering;
-use num_traits::Zero;
 use uniswap_sdk_core::prelude::*;
 
 #[allow(clippy::too_long_first_doc_paragraph)]
@@ -98,10 +97,11 @@ impl<TInput: BaseCurrency, TOutput: BaseCurrency> Trade<TInput, TOutput> {
         trade_type: TradeType,
     ) -> Result<Self, Error> {
         let mut token_amount: CurrencyAmount<Token> = amount.wrapped_owned()?;
+        let currency = amount.meta.currency;
         let input_amount: CurrencyAmount<TInput>;
         let output_amount: CurrencyAmount<TOutput>;
         if trade_type == TradeType::ExactInput {
-            assert!(amount.currency.equals(&route.input), "INPUT");
+            assert!(currency.equals(&route.input), "INPUT");
             for pair in &route.pairs {
                 (token_amount, _) = pair.get_output_amount(&token_amount, false)?;
             }
@@ -116,7 +116,7 @@ impl<TInput: BaseCurrency, TOutput: BaseCurrency> Trade<TInput, TOutput> {
                 token_amount.denominator,
             )?;
         } else {
-            assert!(amount.currency.equals(&route.output), "OUTPUT");
+            assert!(currency.equals(&route.output), "OUTPUT");
             for pair in route.pairs.iter().rev() {
                 (token_amount, _) = pair.get_input_amount(&token_amount, false)?;
             }

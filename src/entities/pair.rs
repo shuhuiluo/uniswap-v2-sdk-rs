@@ -2,8 +2,7 @@ use crate::prelude::{Error, *};
 use alloc::string::ToString;
 use alloy_primitives::keccak256;
 use alloy_sol_types::SolValue;
-use num_traits::Zero;
-use uniswap_sdk_core::{prelude::*, token};
+use uniswap_sdk_core::{prelude::*, token, utils::sqrt::sqrt};
 
 /// Computes the address of a Uniswap V2 pair
 ///
@@ -207,9 +206,9 @@ impl Pair {
         let percent_after_sell_fees = if calculate_fot_fees {
             self.derive_percent_after_sell_fees(input_token)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         };
-        let input_amount_after_tax = if percent_after_sell_fees > ZERO_PERCENT.clone() {
+        let input_amount_after_tax = if percent_after_sell_fees > ZERO_PERCENT {
             CurrencyAmount::from_raw_amount(
                 input_token.clone(),
                 (percent_after_sell_fees.as_fraction() * input_amount.as_fraction()).quotient(),
@@ -218,10 +217,9 @@ impl Pair {
             input_amount.wrapped_owned()?
         };
 
-        let input_amount_with_fee_and_after_tax = input_amount_after_tax.quotient() * _997.clone();
-        let numerator = &input_amount_with_fee_and_after_tax * output_reserve.quotient();
-        let denominator =
-            input_reserve.quotient() * _1000.clone() + &input_amount_with_fee_and_after_tax;
+        let input_amount_with_fee_and_after_tax = input_amount_after_tax.quotient() * _997;
+        let numerator = input_amount_with_fee_and_after_tax * output_reserve.quotient();
+        let denominator = input_reserve.quotient() * _1000 + input_amount_with_fee_and_after_tax;
         let output_amount =
             CurrencyAmount::from_raw_amount(output_token.clone(), numerator / denominator)?;
 
@@ -232,9 +230,9 @@ impl Pair {
         let percent_after_buy_fees = if calculate_fot_fees {
             self.derive_percent_after_buy_fees(output_token)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         };
-        let output_amount_after_tax = if percent_after_buy_fees > ZERO_PERCENT.clone() {
+        let output_amount_after_tax = if percent_after_buy_fees > ZERO_PERCENT {
             CurrencyAmount::from_raw_amount(
                 output_token.clone(),
                 (percent_after_buy_fees.as_fraction() * output_amount.as_fraction()).quotient(),
@@ -267,9 +265,9 @@ impl Pair {
         let percent_after_buy_fees = if calculate_fot_fees {
             self.derive_percent_after_buy_fees(output_token)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         };
-        let output_amount_before_tax = if percent_after_buy_fees > ZERO_PERCENT.clone() {
+        let output_amount_before_tax = if percent_after_buy_fees > ZERO_PERCENT {
             CurrencyAmount::from_raw_amount(
                 output_token.clone(),
                 (output_amount.as_fraction() / percent_after_buy_fees.as_fraction()).quotient()
@@ -296,10 +294,8 @@ impl Pair {
         };
         let input_reserve = self.reserve_of(input_token)?;
 
-        let numerator =
-            input_reserve.quotient() * output_amount_before_tax.quotient() * _1000.clone();
-        let denominator =
-            (output_reserve.quotient() - output_amount_before_tax.quotient()) * _997.clone();
+        let numerator = input_reserve.quotient() * output_amount_before_tax.quotient() * _1000;
+        let denominator = (output_reserve.quotient() - output_amount_before_tax.quotient()) * _997;
         let input_amount = CurrencyAmount::from_raw_amount(
             input_token.clone(),
             numerator / denominator + BigInt::from(1),
@@ -308,9 +304,9 @@ impl Pair {
         let percent_after_sell_fees = if calculate_fot_fees {
             self.derive_percent_after_sell_fees(input_token)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         };
-        let input_amount_before_tax = if percent_after_sell_fees > ZERO_PERCENT.clone() {
+        let input_amount_before_tax = if percent_after_sell_fees > ZERO_PERCENT {
             CurrencyAmount::from_raw_amount(
                 input_token.clone(),
                 (input_amount.as_fraction() / percent_after_sell_fees.as_fraction()).quotient()
@@ -352,8 +348,7 @@ impl Pair {
         }
 
         let liquidity = if total_supply.quotient().is_zero() {
-            (token_amounts.0.quotient() * token_amounts.1.quotient()).sqrt()
-                - MINIMUM_LIQUIDITY.clone()
+            sqrt(token_amounts.0.quotient() * token_amounts.1.quotient())? - MINIMUM_LIQUIDITY
         } else {
             let amount0 =
                 (token_amounts.0.quotient() * total_supply.quotient()) / self.reserve0().quotient();
@@ -396,11 +391,11 @@ impl Pair {
             if k_last.is_zero() {
                 total_supply.clone()
             } else {
-                let root_k = (self.reserve0().quotient() * self.reserve1().quotient()).sqrt();
-                let root_k_last = k_last.sqrt();
+                let root_k = sqrt(self.reserve0().quotient() * self.reserve1().quotient())?;
+                let root_k_last = sqrt(k_last)?;
                 if root_k > root_k_last {
-                    let numerator = total_supply.quotient() * (&root_k - &root_k_last);
-                    let denominator = root_k * FIVE.clone() + root_k_last;
+                    let numerator = total_supply.quotient() * (root_k - root_k_last);
+                    let denominator = root_k * FIVE + root_k_last;
                     let fee_liquidity = numerator / denominator;
                     total_supply.add(&CurrencyAmount::from_raw_amount(
                         self.liquidity_token.clone(),
@@ -427,9 +422,9 @@ impl Pair {
             self.token1().sell_fee_bps
         };
         if sell_fee_bips > 0 {
-            ONE_HUNDRED_PERCENT.clone() - Percent::new(sell_fee_bips, BASIS_POINTS.clone())
+            ONE_HUNDRED_PERCENT - Percent::new(sell_fee_bips, BASIS_POINTS)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         }
     }
 
@@ -441,9 +436,9 @@ impl Pair {
             self.token1().buy_fee_bps
         };
         if buy_fee_bips > 0 {
-            ONE_HUNDRED_PERCENT.clone() - Percent::new(buy_fee_bips, BASIS_POINTS.clone())
+            ONE_HUNDRED_PERCENT - Percent::new(buy_fee_bips, BASIS_POINTS)
         } else {
-            ZERO_PERCENT.clone()
+            ZERO_PERCENT
         }
     }
 }
