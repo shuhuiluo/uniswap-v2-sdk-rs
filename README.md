@@ -5,3 +5,13 @@
 
 A Rust SDK for building applications on top of Uniswap V2.
 Migration from the TypeScript [Uniswap/v2-sdk](https://github.com/Uniswap/v2-sdk).
+
+## Supported Rust Versions (MSRV)
+
+<!--
+When updating this, also update:
+- Cargo.toml
+- .github/workflows/rust.yml
+-->
+
+The current MSRV (minimum supported rust version) is 1.85.
